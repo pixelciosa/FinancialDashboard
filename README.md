@@ -6,6 +6,14 @@ A local AI-powered financial dashboard for tracking and analyzing your investmen
 
 ---
 
+## Screenshots
+
+![Portfolio panel](assets/Portfolio_es.png)
+
+![Stock technical analysis](assets/Stock_Analysis_en.png)
+
+---
+
 ## Features
 
 - **Sidebar** — collapsible ticker list organized by Portfolio / Watching / Archived, with drag-to-reorder, drag-to-delete, type/country filters, and text search
