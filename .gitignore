@@ -1,0 +1,28 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Runtime caches and personal data
+data/
+reports/
+reports_old/
+tasks/
+*.numbers
+# Only the fictional demo CSVs are versioned: keep your own files outside the repo
+# or anywhere that is not sample_data/ / tests/lab/fixtures/.
+*.csv
+!sample_data/*.csv
+!tests/lab/fixtures/*.csv
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Tools / OS
+.DS_Store
+.claude/settings.local.json
+tests/e2e/artifacts/

@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "estado": "provisorio",
+  "nota": "Umbrales iniciales (editables), sujetos a la calibracion contra el historial (ver 'calibracion'). Reglas deterministas, sin IA. Describen el contexto, no recomiendan operaciones.",
+  "ventanas": {
+    "cambio_dias_habiles": 63,
+    "promedio_movil_dias": 200
+  },
+  "histeresis": {
+    "dias_habiles_consecutivos": 5,
+    "descripcion": "Una luz cambia de estado solo si la condicion del nuevo estado se cumple 5 dias habiles seguidos. Hasta entonces conserva el estado anterior."
+  },
+  "indicadores": [
+    {
+      "id": "vix",
+      "parametros": {"tipo": "nivel", "unidad_valor": "puntos", "ambar_desde": 20, "rojo_sobre": 30},
+      "nombre": { "es": "Volatilidad implícita (VIX)", "en": "Implied volatility (VIX)" },
+      "series": ["^VIX"],
+      "metrica": "nivel",
+      "unidad": "puntos",
+      "verde": "< 20",
+      "ambar": ">= 20 y <= 30",
+      "rojo": "> 30"
+    },
+    {
+      "id": "tasa_10a",
+      "parametros": {"tipo": "cambio_abs", "unidad_valor": "pp", "ambar_desde": 0.25, "rojo_sobre": 0.50},
+      "nombre": { "es": "Tasa a 10 años", "en": "10-year yield" },
+      "series": ["^TNX"],
+      "metrica": "cambio_absoluto_63d",
+      "unidad": "puntos porcentuales",
+      "verde": "< +0,25",
+      "ambar": ">= +0,25 y <= +0,50",
+      "rojo": "> +0,50",
+      "verificar": "Confirmar que yfinance entrega ^TNX en porcentaje (p. ej. 4,3) y no multiplicado por 10."
+    },
+    {
+      "id": "curva",
+      "parametros": {"tipo": "diferencia", "unidad_valor": "pp", "verde_sobre": 0.50, "rojo_bajo": 0},
+      "nombre": { "es": "Pendiente de la curva (10a menos 3m)", "en": "Yield curve (10y minus 3m)" },
+      "series": ["^TNX", "^IRX"],
+      "metrica": "nivel de ^TNX - ^IRX",
+      "unidad": "puntos porcentuales",
+      "verde": "> 0,50",
+      "ambar": ">= 0 y <= 0,50",
+      "rojo": "< 0 (curva invertida)",
+      "verificar": "Confirmar la escala de ^IRX igual que ^TNX."
+    },
+    {
+      "id": "dolar",
+      "parametros": {"tipo": "promedio_cambio", "unidad_valor": "indice", "rojo_desde_cambio_pct": 3},
+      "nombre": { "es": "Índice dólar (DXY)", "en": "US dollar index (DXY)" },
+      "series": ["DX-Y.NYB"],
+      "metrica": "posicion respecto del promedio de 200 dias y cambio porcentual 63d",
+      "verde": "cierre <= promedio 200d",
+      "ambar": "cierre > promedio 200d y cambio 63d < +3%",
+      "rojo": "cierre > promedio 200d y cambio 63d >= +3%"
+    },
+    {
+      "id": "petroleo",
+      "parametros": {"tipo": "cambio_pct", "unidad_valor": "%", "ambar_desde": 15, "rojo_sobre": 30},
+      "nombre": { "es": "Petróleo WTI", "en": "WTI crude oil" },
+      "series": ["CL=F"],
+      "metrica": "cambio_porcentual_63d",
+      "verde": "< +15%",
+      "ambar": ">= +15% y <= +30%",
+      "rojo": "> +30%",
+      "verificar": "Si CL=F tiene cierres <= 0 en la ventana, el cambio porcentual no esta definido: la luz queda 'sin datos' ese dia."
+    },
+    {
+      "id": "oro_plata",
+      "parametros": {"tipo": "promedio_cambio", "unidad_valor": "ratio", "rojo_desde_cambio_pct": 10},
+      "nombre": { "es": "Ratio oro/plata (GLD/SLV)", "en": "Gold/silver ratio (GLD/SLV)" },
+      "series": ["GLD", "SLV"],
+      "metrica": "ratio GLD/SLV: posicion respecto del promedio de 200 dias y cambio porcentual 63d",
+      "verde": "ratio <= promedio 200d",
+      "ambar": "ratio > promedio 200d y cambio 63d < +10%",
+      "rojo": "ratio > promedio 200d y cambio 63d >= +10%",
+      "nota": "Se usa la version relativa porque el nivel de GLD/SLV no coincide con el ratio spot y su nivel normal cambio mucho en los ultimos anos."
+    }
+  ],
+  "sin_datos": {
+    "descripcion": "Si una serie falta o no alcanza la ventana, la luz es 'sin datos' (gris) y no cuenta para la etiqueta.",
+    "minimo_luces_validas": 5
+  },
+  "etiqueta_regimen": {
+    "parametros": { "favorable_max_rojas": 1, "mixto_rojas": 2, "adverso_min_rojas": 3 },
+    "cuenta": "luces en rojo (las ambar se muestran pero no cuentan)",
+    "favorable": "0 o 1 roja",
+    "mixto": "2 rojas",
+    "adverso": "3 o mas rojas",
+    "sin_datos_suficientes": "menos de 'minimo_luces_validas' luces con dato"
+  },
+  "calibracion": {
+    "desde": "2024-12-01",
+    "descripcion": "Recalcular cada luz dia por dia desde 'desde' hasta hoy (con histeresis) e informar el porcentaje de dias en verde, ambar y rojo por indicador, y la distribucion de la etiqueta.",
+    "umbral_revision_pct_rojo": 35,
+    "accion": "Si una luz pasa mas de 35% de los dias en rojo, se marca para revision manual. El sistema no ajusta umbrales solo."
+  }
+}

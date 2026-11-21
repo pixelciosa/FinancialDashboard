@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(source venv/bin/activate*)",
+      "Bash(python -m pytest*)",
+      "Bash(venv/bin/python -m pytest*)",
+      "Bash(node --check *)",
+      "Bash(grep *)",
+      "Bash(git status*)",
+      "Bash(git diff*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Edit(./venv/**)",
+      "Edit(./sample_data/**)",
+      "Bash(rm -rf *)"
+    ],
+    "ask": [
+      "Bash(pip install *)",
+      "Bash(python server.py*)"
+    ]
+  }
+}

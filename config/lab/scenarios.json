@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "nota": "Escenarios de estres (editable). Retorno de cada activo = cierre en 'hasta' / cierre en 'desde' - 1, con cierres ajustados en o antes de cada fecha. 'hasta': 'ultimo' = ultima fecha con datos del Lab. Si un activo no existia en 'desde', se usa el indice proxy de su bloque (config/lab/blocks.json).",
+  "escenarios": [
+    {
+      "id": "tasas_2022",
+      "nombre": "stress_tasas_2022",
+      "desde": "2022-01-03",
+      "hasta": "2022-10-12",
+      "descripcion": "Suba de tasas de 2022: la Fed sube tasas con inflacion alta y el S&P 500 cae hasta su minimo del ano.",
+      "nota": "Supuesto del implementador, a confirmar por quien use el Lab: ventana del primer dia habil de 2022 (2022-01-03) al minimo de cierre del S&P 500 del ano (2022-10-12). Se aplican los pesos actuales de la cartera."
+    },
+    {
+      "id": "metales_2026",
+      "nombre": "stress_metales_2026",
+      "desde": "2026-01-02",
+      "hasta": "ultimo",
+      "descripcion": "Caida de metales de enero a noviembre de 2026: del primer dia habil del ano a la ultima fecha con datos.",
+      "nota": "Ventana desde el 2026-01-02 hasta la ultima fecha con datos del Lab ('ultimo'). Se aplica a toda la cartera, no solo a los metales."
+    },
+    {
+      "id": "dia_2026_11_05",
+      "nombre": "stress_dia_2026_11_05",
+      "desde": "2026-11-04",
+      "hasta": "2026-11-05",
+      "descripcion": "El 5 de noviembre de 2026: retorno de un solo dia, del cierre del 4/11 al cierre del 5/11.",
+      "nota": "Retorno de un solo dia: cierre del 2026-11-04 al cierre del 2026-11-05, con los pesos actuales."
+    },
+    {
+      "id": "covid_2020",
+      "nombre": "stress_covid_2020",
+      "desde": "2020-02-19",
+      "hasta": "2020-03-23",
+      "descripcion": "Marzo de 2020: del pico al valle del S&P 500 durante el inicio de la pandemia.",
+      "nota": "Supuesto del implementador, a confirmar por quien use el Lab: ventana del maximo de cierre del S&P 500 (2020-02-19) al minimo de cierre (2020-03-23)."
+    }
+  ]
+}

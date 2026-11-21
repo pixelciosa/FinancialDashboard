@@ -1,0 +1,5 @@
+{
+  "nota": "Lab settings (editable). The ledger file comes from LEDGER_CSV (default sample_data/ledger.csv). Rows whose 'plataforma' is listed in excluded_platforms are left out of the Lab but used to explain reconciliation gaps ('esperada_excluida').",
+  "excluded_platforms": ["BankC"],
+  "umbral_recorte_pct": 0.5
+}

@@ -1,0 +1,93 @@
+{
+  "version": 2,
+  "nota": "Risk blocks of the Lab (editable). Crypto tickers can be written with or without the -USD suffix. A ticker that is not in any block falls into 'resto'; if it is in several, the first one wins. 'indice_proxy' is the yfinance ETF/index used when an asset did not exist during a scenario window. 'bandas.referencia_pct' is the weight of the block on the reference date (descriptive mode): an alert means the block drifted away from that reference, not that it is wrong. The band is computed with 'regla_banda'. Demo values: the references are the weights of the fictional portfolio on the last day of the price fixture.",
+  "regla_banda": {
+    "nombre": "5/25",
+    "descripcion": "Band = reference +/- the smaller of 'absoluta_pp' points and 'relativa' x reference.",
+    "absoluta_pp": 5.0,
+    "relativa": 0.25,
+    "fecha_referencia": "2026-11-13"
+  },
+  "tope_posicion": {
+    "aviso_pct": 15.0,
+    "alerta_pct": 25.0,
+    "excepciones": [
+      "VTI"
+    ],
+    "nota": "VTI is a deliberate exception (broad-market core holding): it is shown with the 'excepcion' label, without warning or alert."
+  },
+  "bloques": [
+    {
+      "id": "nucleo_etf",
+      "nombre": "Core ETFs",
+      "tickers": [
+        "VTI",
+        "BND",
+        "VNQ"
+      ],
+      "indice_proxy": "SPY",
+      "bandas": {
+        "referencia_pct": 24.6
+      }
+    },
+    {
+      "id": "tecnologia",
+      "nombre": "Technology & media",
+      "tickers": [
+        "NFLX",
+        "ORCL",
+        "CRM"
+      ],
+      "indice_proxy": "QQQ",
+      "bandas": {
+        "referencia_pct": 28.3
+      }
+    },
+    {
+      "id": "consumo_salud",
+      "nombre": "Consumer & healthcare",
+      "tickers": [
+        "COST",
+        "JNJ",
+        "HD"
+      ],
+      "indice_proxy": "XLP",
+      "bandas": {
+        "referencia_pct": 14.0
+      }
+    },
+    {
+      "id": "financieras",
+      "nombre": "Financials",
+      "tickers": [
+        "JPM",
+        "NU"
+      ],
+      "indice_proxy": "SPY",
+      "bandas": {
+        "referencia_pct": 29.1
+      }
+    },
+    {
+      "id": "cripto",
+      "nombre": "Crypto",
+      "tickers": [
+        "SOL",
+        "ADA"
+      ],
+      "indice_proxy": "BTC-USD",
+      "bandas": {
+        "referencia_pct": 4.0
+      }
+    },
+    {
+      "id": "resto",
+      "nombre": "Other",
+      "tickers": [],
+      "indice_proxy": "SPY",
+      "bandas": {
+        "referencia_pct": 0.0
+      }
+    }
+  ]
+}

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Portfolio Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<link rel="stylesheet" href="/lab_ui/tokens.css">
+<link rel="stylesheet" href="/lab_ui/lab.css">
+</head>
+<body>
+<header class="lab-topbar">
+  <a href="/" id="labBack" data-i18n="back" data-i18n-title="back_tip">&larr; Dashboard</a>
+  <h1 data-i18n="lab_title">Portfolio Lab</h1>
+  <span class="lab-spacer"></span>
+  <span class="lab-asof" id="labAsOf" data-i18n-title="data_as_of_tip"></span>
+  <label class="lab-field" data-i18n-title="bench_tip"><span data-i18n="bench_label">Index</span>
+    <select id="labBench" aria-label="Index"></select></label>
+  <label class="lab-field" data-i18n-title="period_tip"><span data-i18n="period_label">Period</span>
+    <select id="labPeriod" aria-label="Period"></select></label>
+  <div class="lab-lang" role="group" data-i18n-title="lang_tip">
+    <button type="button" data-lang="en">EN</button><button type="button" data-lang="es">ES</button>
+  </div>
+  <span class="lab-caches" id="labCaches" hidden></span>
+  <button type="button" class="lab-btn" id="labRefresh" aria-disabled="false" data-i18n="refresh" data-i18n-title="refresh_tip">Refresh</button>
+</header>
+<div class="lab-refresh-panel" id="labRefreshPanel" role="status" aria-live="polite" hidden></div>
+
+<div class="lab-layout">
+  <nav class="lab-nav" id="labNav" aria-labelledby="labNavLbl">
+    <span id="labNavLbl" hidden data-i18n="nav_label">Sections</span>
+    <a href="#resumen" data-i18n="nav_resumen">Summary</a>
+    <a href="#desempeno" data-i18n="nav_desempeno">Performance</a>
+    <a href="#exposicion" data-i18n="nav_exposicion">Exposure</a>
+    <a href="#correlacion" data-i18n="nav_correlacion">Correlation</a>
+    <a href="#atribucion" data-i18n="nav_atribucion">Attribution</a>
+    <a href="#macro" data-i18n="nav_macro">Macro</a>
+    <a href="#estres" data-i18n="nav_estres">Stress tests</a>
+    <a href="#diario" data-i18n="nav_diario">Journal</a>
+    <a href="#libro" data-i18n="nav_libro">Ledger</a>
+  </nav>
+
+  <main class="lab-main">
+    <section class="lab-section" id="resumen">
+      <h2 data-i18n="sec_resumen">Summary</h2>
+      <p class="lab-note" data-i18n="intro_note"></p>
+      <div class="lab-grid">
+        <div class="lab-slot" data-card="resumen" data-title="card_resumen" data-sub="card_resumen_sub"></div>
+      </div>
+    </section>
+
+    <section class="lab-section" id="desempeno">
+      <h2 data-i18n="sec_desempeno">Performance</h2>
+      <div class="lab-grid">
+        <div class="lab-slot" data-card="evolucion" data-title="card_evol" data-sub="card_evol_sub"></div>
+        <div class="lab-slot" data-card="periodos" data-title="card_periods" data-sub="card_periods_sub"></div>
+        <div class="lab-slot" data-card="drawdown" data-title="card_dd" data-sub="card_dd_sub"></div>
+      </div>
+    </section>
+
+    <section class="lab-section" id="exposicion">
+      <h2 data-i18n="sec_exposicion">Exposure</h2>
+      <div class="lab-grid"><div class="lab-slot" data-card="exposicion" data-title="card_expo" data-sub="card_expo_sub"></div></div>
+    </section>
+
+    <section class="lab-section" id="correlacion">
+      <h2 data-i18n="sec_correlacion">Correlation and risk</h2>
+      <div class="lab-grid">
+        <div class="lab-slot" data-card="mapa" data-title="card_heat" data-sub="card_heat_sub"></div>
+        <div class="lab-slot" data-card="dispersion" data-title="card_scatter" data-sub="card_scatter_sub"></div>
+        <div class="lab-slot" data-card="movil" data-title="card_movil" data-sub="card_movil_sub" data-min-window="5" data-max-window="250"></div>
+      </div>
+    </section>
+
+    <section class="lab-section" id="atribucion">
+      <h2 data-i18n="sec_atribucion">Attribution</h2>
+      <div class="lab-toolbar" id="labAttrRange" role="group"></div>
+      <div class="lab-grid"><div class="lab-slot" data-card="atribucion" data-title="card_attr" data-sub="card_attr_sub"></div></div>
+    </section>
+
+    <section class="lab-section" id="macro">
+      <h2 data-i18n="sec_macro">Macro traffic light</h2>
+      <div class="lab-grid"><div class="lab-slot" data-card="macro" data-title="card_macro" data-sub="card_macro_sub"></div></div>
+    </section>
+
+    <section class="lab-section" id="estres">
+      <h2 data-i18n="sec_estres">Stress tests</h2>
+      <div class="lab-grid"><div class="lab-slot" data-card="estres" data-title="card_stress" data-sub="card_stress_sub"></div></div>
+    </section>
+
+    <section class="lab-section" id="diario">
+      <h2 data-i18n="sec_diario">Journal</h2>
+      <div class="lab-grid"><div class="lab-slot" data-card="diario" data-title="card_journal" data-sub="card_journal_sub" data-max-tesis="2000" data-max-nota="500" data-max-ticker="15" data-max-entries="500"></div></div>
+    </section>
+
+    <section class="lab-section" id="libro">
+      <h2 data-i18n="sec_libro">Ledger</h2>
+      <div class="lab-grid">
+        <div class="lab-slot" data-card="conciliacion" data-title="card_reco" data-sub="card_reco_sub"></div>
+        <div class="lab-slot" data-card="operaciones" data-title="card_ledger" data-sub="card_ledger_sub"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="/lab_ui/lab_i18n.js"></script>
+<script src="/lab_ui/lab_charts.js"></script>
+<script src="/lab_ui/lab_app.js"></script>
+</body>
+</html>

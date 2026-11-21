@@ -1,0 +1,16 @@
+:root {
+  --bg: #08090d;
+  --surface: #0f1117;
+  --surface2: #13161e;
+  --surface3: #181c26;
+  --border: #1e2230;
+  --text: #dde1f0;
+  --muted: #8892b0;
+  --accent: #4d9fff;
+  --green: #10d9a0;
+  --red: #ff3d5a;
+  --amber: #f5a524;
+  --orange: #ff6b35;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'DM Sans', system-ui, sans-serif;
+}
