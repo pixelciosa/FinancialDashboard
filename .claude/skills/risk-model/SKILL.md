@@ -56,6 +56,13 @@ Puntaje = puntos / máximo de las métricas incluidas × 100.
   Escribe la misma caché, así registro, tab y sidebar coinciden. `build_report(hist=..., prev=...)` acepta precios
   ya descargados en lote y reutiliza las fechas de resultados si el trimestre no cambió.
 - `market` agrega `ema20` (misma fórmula que el gráfico) y `bb_upper`/`bb_lower` (Bollinger 20, 2σ); no suman puntos.
+- **`risk_score` es `null` (nunca 0)** cuando no hay métricas aplicables (todas excluidas; suma de máximos de
+  pilares = 0): un 0 significaría "riesgo mínimo", lo cual sería falso. En ese caso `coverage` = 0 y
+  `level` = `'insufficient'` (lo mismo ocurre si `coverage` < `MIN_COVERAGE`). `level_for` solo se llama con score no nulo.
+- Consumidores (UI, narrativa, agente): con `risk_score` nulo mostrar "No disponible" / "n/a", nunca 0 ni "null/100"
+  (`narrative.build_facts` ya imprime "n/a"). En `index.html` lo hacen los helpers `riskGaugeValueSvg` y `riskScoreText`
+  (clave i18n `risk_score_na`, EN/ES) y el puntero de la barra de bandas; todos usan `Number.isFinite`, así que NaN/Infinity también
+  muestran "No disponible" y un 0 real sí dibuja el gauge.
 - `inputs_hash`: la narrativa IA (fase R2) se regenera solo si cambia.
 - Eventos: fechas de presentación con `get_earnings_dates` (necesita `lxml`). Si fallan, se usan los
   cierres de trimestre como `quarter_end` (nunca como `earnings`) y el error se informa en consola.

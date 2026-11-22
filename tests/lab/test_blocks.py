@@ -24,7 +24,7 @@ def _load(data, tmp_path):
 
 def test_real_blocks_json_is_valid_and_matches_plan():
     """config/lab/blocks.json of the demo. Reference weights were regenerated from the FICTIONAL
-    portfolio (sample_data/ledger.csv + synthetic price fixture) by scripts/generate_demo_data.py."""
+    portfolio (sample_data/ledger.csv + investments_ledger.csv + synthetic price fixture) by scripts/generate_demo_data.py."""
     cfg = blocks.load_blocks()
     ids = [b['id'] for b in cfg['blocks']]
     assert ids == ['nucleo_etf', 'tecnologia', 'consumo_salud', 'financieras', 'cripto', 'resto']
@@ -32,7 +32,7 @@ def test_real_blocks_json_is_valid_and_matches_plan():
                               'financieras': 'SPY', 'cripto': 'BTC-USD', 'resto': 'SPY'}
     assert cfg['names']['nucleo_etf'] == 'Core ETFs' and cfg['names']['cripto'] == 'Crypto'
     refs = {b['id']: b['referencia_pct'] for b in cfg['blocks']}
-    assert refs == {'nucleo_etf': 24.6, 'tecnologia': 28.3, 'consumo_salud': 14.0, 'financieras': 29.1,
+    assert refs == {'nucleo_etf': 25.1, 'tecnologia': 27.9, 'consumo_salud': 14.4, 'financieras': 28.7,
                     'cripto': 4.0, 'resto': 0.0}
     assert sum(refs.values()) == pytest.approx(100.0, abs=0.2)
     assert [b['id'] for b in cfg['blocks'] if b['comodin']] == ['resto']

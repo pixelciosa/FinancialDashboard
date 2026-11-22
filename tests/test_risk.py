@@ -366,3 +366,10 @@ def test_identical_inputs_identical_hash(client, fake_yf):
     a = risk.build_report('ACME')
     b = risk.build_report('ACME')
     assert a['inputs_hash'] == b['inputs_hash'] and a['risk_score'] == b['risk_score']
+
+
+def test_score_is_none_when_nothing_applicable():
+    only_excluded = {'key': 'market', 'metrics': [risk.neutral('volatility', 10, 'x'), risk.neutral('max_drawdown', 8, 'x'),
+                                                  risk.neutral('trend', 6, 'x'), risk.neutral('beta', 6, 'x')]}
+    rep = risk.compose([only_excluded])
+    assert rep['risk_score'] is None and rep['coverage'] == 0 and rep['level'] == 'insufficient'

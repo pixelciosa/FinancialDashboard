@@ -404,7 +404,7 @@ DXY_FIXTURE = os.path.join(FIXTURES, 'dxy_2026-11-13.csv')
 
 
 def _ledger_available():
-    """The demo ledger (sample_data/ledger.csv, fictional) ships with the repo."""
+    """The demo ledger (sample_data/ledger.csv + investments_ledger.csv, fictional) ships with the repo."""
     return os.path.exists(ledger.LEDGER_PATH)
 
 
@@ -446,9 +446,10 @@ def test_real_golden_numbers_unchanged_and_stress_figures_preserved(real_inputs)
     dates, px, ops, df = real_inputs
     res = engine.analyze(dates, px, ops, [b for b in prices.INDEX_TICKERS if b != 'DX-Y.NYB'])
     st = res['series']['PORT']['stats']
-    # demo edition: figures regenerated from the fictional ledger + synthetic fixture prices
-    assert st['cum'] * 100 == pytest.approx(37.2, abs=0.1) and st['vol'] * 100 == pytest.approx(19.8, abs=0.1)
-    assert res['port']['v_end'] == pytest.approx(41073, rel=0.005)
+    # demo edition: figures regenerated from the fictional ledger (ledger.csv + investments_ledger.csv)
+    # and the synthetic fixture prices
+    assert st['cum'] * 100 == pytest.approx(37.08, abs=0.1) and st['vol'] * 100 == pytest.approx(19.75, abs=0.1)
+    assert res['port']['v_end'] == pytest.approx(41739, rel=0.005)
     # las cifras del estres no cambian con el esquema nuevo de blocks.json ni con los proxies aparte
     sc = os.path.join(FIXTURES, 'stress_prices.csv')
     if not os.path.exists(sc):
@@ -458,8 +459,8 @@ def test_real_golden_numbers_unchanged_and_stress_figures_preserved(real_inputs)
     pos, _, _ = stress.current_weights(port['holdings_end'], stress.last_prices_from(px))
     out = stress.run_all(stress.load_scenarios(), pos, pd.read_csv(sc, index_col=0, parse_dates=True), cfg, dates[-1])
     imp = {e['id']: e['impacto_pct'] for e in out}
-    assert imp['tasas_2022'] == pytest.approx(-22.75, abs=0.01) and imp['metales_2026'] == pytest.approx(40.99, abs=0.01)
-    assert imp['dia_2026_11_05'] == pytest.approx(-4.13, abs=0.01) and imp['covid_2020'] == pytest.approx(-34.27, abs=0.01)
+    assert imp['tasas_2022'] == pytest.approx(-22.35, abs=0.01) and imp['metales_2026'] == pytest.approx(40.27, abs=0.01)
+    assert imp['dia_2026_11_05'] == pytest.approx(-4.08, abs=0.01) and imp['covid_2020'] == pytest.approx(-33.85, abs=0.01)
 
 
 @real

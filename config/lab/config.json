@@ -1,5 +1,18 @@
 {
-  "nota": "Lab settings (editable). The ledger file comes from LEDGER_CSV (default sample_data/ledger.csv). Rows whose 'plataforma' is listed in excluded_platforms are left out of the Lab but used to explain reconciliation gaps ('esperada_excluida').",
-  "excluded_platforms": ["BankC"],
+  "nota": "Lab settings (editable). Inputs: the history/opening-positions file from LEDGER_CSV (default sample_data/ledger.csv) and the investments ledger files listed in ledger_files (paths relative to ledger_dir, or to the project root when ledger_dir is empty; the env var INVESTMENTS_LEDGER_CSV overrides the list). An entry can be a path or {\"path\": ..., \"titular\": ...}. Rows whose platform is in excluded_platforms are left out of the Lab but explain reconciliation gaps ('esperada_excluida'); when included_platforms is not empty, any other platform is reported as a row error.",
+  "ledger_dir": "",
+  "ledger_files": [
+    {
+      "path": "sample_data/investments_ledger.csv",
+      "titular": "Holder A"
+    }
+  ],
+  "included_platforms": [
+    "BrokerA",
+    "ExchangeB"
+  ],
+  "excluded_platforms": [
+    "BankC"
+  ],
   "umbral_recorte_pct": 0.5
 }

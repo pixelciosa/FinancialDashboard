@@ -232,14 +232,15 @@ FIXTURE = os.path.join(FIXTURES, 'prices_2026-11-13.csv')
 
 
 def _ledger_available():
-    """The demo ledger (sample_data/ledger.csv, fictional) ships with the repo."""
+    """The demo ledger (sample_data/ledger.csv + investments_ledger.csv, fictional) ships with the repo."""
     return os.path.exists(ledger.LEDGER_PATH)
 
 
 @pytest.mark.skipif(not (os.path.exists(FIXTURE) and _ledger_available()),
                     reason='faltan el libro real o el fixture de precios congelados')
 def test_real_ledger_full_period_reconciles(monkeypatch):
-    """Expected values regenerated from the FICTIONAL demo ledger and synthetic fixture prices."""
+    """Expected values regenerated from the FICTIONAL demo ledger (sample_data/ledger.csv +
+    investments_ledger.csv) and synthetic fixture prices."""
     ops = prices.to_price_ops(ledger.load_ledger()['ops'])
     dates, px = prices.align(pd.read_csv(FIXTURE, index_col=0, parse_dates=True))
     monkeypatch.setattr(api, '_load_inputs', lambda: (dates, px, ops))
@@ -247,8 +248,8 @@ def test_real_ledger_full_period_reconciles(monkeypatch):
     app.register_blueprint(api.lab_bp)
     d = _strict(app.test_client().get('/api/lab/attribution'))
     assert d['ok'] and d['hasta'] == '2026-11-13'
-    assert d['resumen']['valor_final'] == pytest.approx(41072.76, abs=1)
-    assert d['resumen']['resultado_usd'] == pytest.approx(10606.74, abs=1)
+    assert d['resumen']['valor_final'] == pytest.approx(41738.50, abs=1)
+    assert d['resumen']['resultado_usd'] == pytest.approx(10645.52, abs=1)
     assert d['reconciliacion']['ok'], d['reconciliacion']['diferencias_por_ticker']
     assert d['reconciliacion']['diferencia'] <= 0.5
 

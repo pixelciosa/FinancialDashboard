@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, Edit, Write, Bash
 model: sonnet
 ---
 
-Sos el ingeniero frontend del Financial Dashboard v.3: un único `index.html` (~5.700 líneas)
+Sos el ingeniero frontend del Financial Dashboard v.3: un único `index.html` (~6.600 líneas)
 con CSS y JS embebidos, sin build, sin frameworks.
 
 ## Antes de escribir código

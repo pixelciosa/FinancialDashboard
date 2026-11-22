@@ -5,7 +5,7 @@ description: Mapa de index.html (anclas para grep), convenciones de UI, i18n y e
 
 # index.html: mapa y convenciones
 
-El archivo tiene ~5.700 líneas. **Ubicá con grep y leé rangos cortos**; los números de línea
+El archivo tiene ~6.600 líneas. **Ubicá con grep y leé rangos cortos**; los números de línea
 cambian, las anclas no.
 
 ## Anclas (`grep -n '<ancla>' index.html`)
@@ -29,8 +29,10 @@ cambian, las anclas no.
 | Gráficos canvas propios | `function drawBars(` · `function drawEtfReturns(` |
 | Reporte de Riesgo (R3) | `RISK REPORT (R3)` · `function renderRiskOverview(` · `function renderRiskDeep(` · `async function renderRiskTicker(` |
 | Caché de riesgo | `const RISK = {}` · `RISK_SUMMARY` · `RISK_NARR` · `async function fetchRisk(` |
+| Puntaje de riesgo nulo ("No disponible") | `function riskGaugeValueSvg(` · `function riskScoreText(` · clave i18n `risk_score_na` (usan `Number.isFinite`) |
 | Píldora de estado compartida | `function renderStatusPill(` (vive en el bloque de riesgo; la usan todas las tabs) |
-| Portfolio | `PORTFOLIO TAB` |
+| Portfolio | `PORTFOLIO TAB` · cripto desde la API: `cryptoSyms = resp.cryptoSymbols` (no hay lista fija) |
+| Enlace al Portfolio Lab | `id="pfLabLink"` (oculto por defecto) · `async function initLabLink(` (consulta `/api/lab/health`) |
 | Portfolio Agent (chat) | `PORTFOLIO AGENT (chat` · `function renderChatMarkdown(` · `function renderChatTable(` · `async function sendChatMessage(` |
 | Modo Explorar | `MODO EXPLORAR` · `function renderExploreBlock(` · `function addToWatching(` · `function toggleExplorePrefs(` |
 | Registro de valuaciones | `REGISTRO DE VALUACIONES` · `function renderValuations(` · `function refreshValuations(` · `id="valModalBackdrop"` |

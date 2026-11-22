@@ -509,6 +509,11 @@ def _etf_payload(t, ticker, info, today):
     }
 
 
+def annualize_quarterly(values):
+    """Anualiza trimestres (x4). Dato faltante -> None (nunca 0); un 0 real se conserva."""
+    return [None if num(v) is None else num(v) * 4 for v in values]
+
+
 def _stock_payload(t, info, today):
     income = _safe_attr(t, 'income_stmt')
     cashflow = _safe_attr(t, 'cashflow')
@@ -520,7 +525,7 @@ def _stock_payload(t, info, today):
     if income is not None and not income.empty and 'Total Revenue' in income.index:
         revs = [num(v) for v in income.loc['Total Revenue'].tolist()]
     if not any(revs) and q_income is not None and not q_income.empty and 'Total Revenue' in q_income.index:
-        revs = [(num(v) or 0) * 4 for v in q_income.loc['Total Revenue'].tolist()]
+        revs = annualize_quarterly(q_income.loc['Total Revenue'].tolist())
     max_rev = max((abs(v) for v in revs if v is not None), default=0)
     scale, unit = (1e9, '$B') if max_rev >= 2e9 else (1e6, '$M')
 

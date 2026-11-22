@@ -258,3 +258,8 @@ def test_missing_kpi_shows_na_not_null(client, fake_yf):
 
 def test_invalid_ticker_rejected(client):
     assert client.get('/api/financials/<x>').status_code in (400, 404)
+
+
+def test_annualize_quarterly_keeps_missing_as_none_and_real_zero():
+    out = fin.annualize_quarterly([10.5, None, float('nan'), 0.0, -2.25])
+    assert out == [42.0, None, None, 0.0, -9.0]

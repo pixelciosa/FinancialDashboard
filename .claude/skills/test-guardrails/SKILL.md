@@ -28,7 +28,7 @@ description: Cómo escribir y mantener los tests del dashboard (offline, fakes, 
 | Número mal calculado | `test_data_integrity.py` (recalcular desde la fuente, no snapshot) |
 | La IA impone un dato | `test_ai_guardrails.py` |
 | Se consulta el activo equivocado | `test_asset_identity.py` |
-| Archivos generados corruptos | `test_reports_schema.py` |
+| Portfolio Lab | `tests/lab/` (ver skill `portfolio-lab`) |
 | Contrato HTML ↔ API, i18n, JS | `test_frontend_contracts.py` |
 | Nueva tab financiera | `test_financials_spec.py` |
 
@@ -42,3 +42,7 @@ description: Cómo escribir y mantener los tests del dashboard (offline, fakes, 
 5. Prohibido para "poner en verde": borrar aserciones, ampliar tolerancias sin justificar,
    marcar `xfail` algo que andaba o agregar `skip` sin motivo escrito.
 6. Si un test falla y no está claro si el bug es del test o del código: reportalo, no adivines.
+7. Un test intermitente puede depender del RELOJ: aquí, sellos ISO con hora (`risk_computed_at=...T23:50:37`) que `extract_numbers`
+   leía como cifras (arreglado en `narrative._ISO_DATE`). Para depurar, capturar el prompt/contexto en una corrida que falle (loop de ~40).
+8. Los tests sobre los archivos de la demo (`sample_data/`, ficticios) pueden fijar conteos exactos; si los datos se regeneran con `scripts/generate_demo_data.py`, actualizar esos valores (y los dorados) en el mismo cambio y decirlo en el docstring.
+9. Un test de mutación/revert de código de producción (probar que falla si se revierte) exige re-verificar el archivo después: confirmar que quedó restaurado.

@@ -1,14 +1,14 @@
 ticker,name,type,quantity,cost_basis_usd
 JPM,JPMorgan Chase & Co.,Stock,12,2796.53
 COST,Costco Wholesale,Stock,3,3006.14
-JNJ,Johnson & Johnson,Stock,10,1324.70
+JNJ,Johnson & Johnson,Stock,12,1584.96
 HD,The Home Depot,Stock,5,1716.20
 NFLX,Netflix Inc.,Stock,20,2472.00
 ORCL,Oracle Corporation,Stock,8,1443.31
 CRM,Salesforce Inc.,Stock,7,2747.78
-NU,Nu Holdings Ltd.,Stock,150,2851.30
+NU,Nu Holdings Ltd.,Stock,145,2768.30
 VTI,Vanguard Total Stock Market ETF,ETF,15,4223.79
-BND,Vanguard Total Bond Market ETF,ETF,30,2228.10
+BND,Vanguard Total Bond Market ETF,ETF,35,2594.80
 VNQ,Vanguard Real Estate ETF,ETF,20,2082.00
-SOL,Solana,Crypto,10,1430.72
-ADA,Cardano,Crypto,3000,3242.36
+SOL,Solana,Crypto,10.7623,1510.64
+ADA,Cardano,Crypto,2725,2924.25

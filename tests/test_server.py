@@ -182,3 +182,84 @@ def test_financials_etf_branch(client, fake_yf):
     # 2021 no tiene cierre del año anterior: se descarta en vez de mostrar un año parcial
     assert data['years'] == ['FY22', 'FY23', 'FY24', 'FY25']
     assert data['annualReturns'][0] == pytest.approx(round((1.01 ** 12 - 1) * 100, 1))
+
+
+def test_portfolio_exposes_crypto_symbols_from_server_source(client, server_module, monkeypatch):
+    # demo edition: load_portfolio_from_csv rebuilds COINGECKO_IDS from the CSV; stub it (and the
+    # CoinGecko call) so the test stays offline and sees the patched registry
+    monkeypatch.setattr(server_module, 'load_portfolio_from_csv', lambda *a, **k: {})
+    monkeypatch.setattr(server_module, 'fetch_coingecko_prices', lambda *a, **k: {})
+    res = client.get('/api/portfolio')
+    assert res.status_code == 200
+    assert res.get_json()['cryptoSymbols'] == sorted(set(server_module.COINGECKO_IDS) | set(server_module.CRYPTO_YF_SUFFIX))
+
+
+def test_portfolio_crypto_symbols_include_coingecko_only(client, server_module, monkeypatch):
+    # demo edition: load_portfolio_from_csv rebuilds COINGECKO_IDS from the CSV; stub it (and the
+    # CoinGecko call) so the test stays offline and sees the patched registry
+    monkeypatch.setattr(server_module, 'load_portfolio_from_csv', lambda *a, **k: {})
+    monkeypatch.setattr(server_module, 'fetch_coingecko_prices', lambda *a, **k: {})
+    monkeypatch.setitem(server_module.COINGECKO_IDS, 'ZZZONLYCG', 'zzz-only-cg')
+    assert 'ZZZONLYCG' not in server_module.CRYPTO_YF_SUFFIX
+    syms = client.get('/api/portfolio').get_json()['cryptoSymbols']
+    assert 'ZZZONLYCG' in syms
+    assert syms == sorted(syms) and all(isinstance(x, str) for x in syms)
+
+
+@pytest.mark.parametrize('sym', ['USD_CASH', 'ARS', 'EUR'])
+def test_portfolio_cash_pnl_is_null_not_zero(client, server_module, monkeypatch, sym):
+    # demo edition: cash rows come from CASH_CSV with the 'cash' flag (USD_CASH + ISO codes)
+    monkeypatch.setattr(server_module, 'load_portfolio_from_csv',
+                        lambda *a, **k: {sym: {'currentValue': 100.37, 'cash': True, 'currency': sym[:3]}})
+    monkeypatch.setattr(server_module, 'fetch_coingecko_prices', lambda *a, **k: {})
+    data = client.get('/api/portfolio').get_json()['data'][sym]
+    assert data['unrealizedPnl'] is None
+    assert data['unrealizedPnlPct'] is None
+    assert data['changePct'] is None and data['change'] is None and data['currentPrice'] is None
+
+
+def _portfolio_with_failing_yf(client, server_module, monkeypatch, pos):
+    class Boom:
+        def __init__(self, *a, **k):
+            pass
+
+        @property
+        def info(self):
+            raise RuntimeError('yahoo caido')
+
+    monkeypatch.setattr(server_module, 'load_portfolio_from_csv', lambda *a, **k: {'ZZERR': pos})
+    monkeypatch.setattr(server_module, 'fetch_coingecko_prices', lambda *a, **k: {})
+    monkeypatch.setattr(server_module.yf, 'Ticker', Boom)
+    resp = client.get('/api/portfolio')
+    return resp, resp.get_json()['data']['ZZERR']
+
+
+def test_portfolio_fetch_error_branch_emits_null_not_zero(client, server_module, monkeypatch):
+    pos = {'shares': 3.5, 'costBasis': 412.37}
+    resp, row = _portfolio_with_failing_yf(client, server_module, monkeypatch, pos)
+    assert 'yahoo caido' in row['error']
+    # lo que viene del CSV se conserva (demo: sin precio, el valor se muestra al costo)
+    assert row['shares'] == 3.5 and row['costBasis'] == 412.37 and row['currentValue'] == 412.37
+    # lo que dependia del precio en vivo es null (clave presente), nunca 0
+    for k in ('currentPrice', 'change', 'changePct'):
+        assert k in row and row[k] is None, k
+    for k in ('unrealizedPnl', 'unrealizedPnlPct'):
+        assert k in row and row[k] is None, k
+    body = resp.get_data(as_text=True)
+    assert 'NaN' not in body and 'Infinity' not in body
+
+
+def test_portfolio_fetch_error_branch_without_csv_values_is_null(client, server_module, monkeypatch):
+    resp, row = _portfolio_with_failing_yf(client, server_module, monkeypatch,
+                                           {'shares': 2.25, 'costBasis': None})
+    assert row['costBasis'] is None and row['currentValue'] is None
+    assert row['unrealizedPnl'] is None and row['unrealizedPnlPct'] is None
+    assert 'NaN' not in resp.get_data(as_text=True)
+
+
+def test_portfolio_prompt_missing_value_is_na_not_zero():
+    import server
+    lines, total = server._portfolio_prompt_lines({
+        'AAA': {'shares': 1, 'costBasis': 100.0}, 'BBB': {'shares': 2}, 'CCC': {'currentValue': 50.0}})
+    assert total == 150.0
+    assert 'value: n/a' in lines[1] and 'value: $0' not in ''.join(lines)

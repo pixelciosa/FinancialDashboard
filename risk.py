@@ -219,7 +219,8 @@ def compose(pillars):
     mx = sum(p['max'] for p in pillars)
     expected = [x for p in pillars for x in p['metrics'] if not x.get('excluded')]
     coverage = round(sum(1 for x in expected if not x['missing']) / len(expected), 2) if expected else 0
-    score = round(pts / mx * 100) if mx else 0
+    # Sin métricas aplicables no hay puntaje: 0 significaría "riesgo mínimo".
+    score = round(pts / mx * 100) if mx else None
     val = next((p for p in pillars if p['key'] == 'valuation'), None)
     valuation_label, reason = None, None
     if val is None:
@@ -236,7 +237,7 @@ def compose(pillars):
             valuation_label = next(lb for lim, lb in VALUATION_LABELS if r < lim)
     return {
         'risk_score': score, 'coverage': coverage,
-        'level': level_for(score) if coverage >= MIN_COVERAGE else 'insufficient',
+        'level': level_for(score) if score is not None and coverage >= MIN_COVERAGE else 'insufficient',
         'valuation_label': valuation_label, 'valuation_reason': reason,
         'pillars': pillars,
     }

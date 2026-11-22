@@ -12,21 +12,35 @@
 <link rel="stylesheet" href="/lab_ui/lab.css">
 </head>
 <body>
-<header class="lab-topbar">
-  <a href="/" id="labBack" data-i18n="back" data-i18n-title="back_tip">&larr; Dashboard</a>
-  <h1 data-i18n="lab_title">Portfolio Lab</h1>
-  <span class="lab-spacer"></span>
-  <span class="lab-asof" id="labAsOf" data-i18n-title="data_as_of_tip"></span>
-  <label class="lab-field" data-i18n-title="bench_tip"><span data-i18n="bench_label">Index</span>
-    <select id="labBench" aria-label="Index"></select></label>
-  <label class="lab-field" data-i18n-title="period_tip"><span data-i18n="period_label">Period</span>
-    <select id="labPeriod" aria-label="Period"></select></label>
-  <div class="lab-lang" role="group" data-i18n-title="lang_tip">
-    <button type="button" data-lang="en">EN</button><button type="button" data-lang="es">ES</button>
+<header class="lab-topbar" id="labTopbar">
+  <div class="lab-head-title">
+    <a href="/" id="labBack" class="lab-back" data-i18n="back" data-i18n-title="back_tip">&larr; Dashboard</a>
+    <h1 data-i18n="lab_title">Portfolio Lab</h1>
   </div>
-  <span class="lab-caches" id="labCaches" hidden></span>
-  <button type="button" class="lab-btn" id="labRefresh" aria-disabled="false" data-i18n="refresh" data-i18n-title="refresh_tip">Refresh</button>
+  <div class="lab-head-actions">
+    <div class="lab-lang lang-picker" role="group" data-i18n-title="lang_tip">
+      <button type="button" class="lang-btn" data-lang="en">EN</button><button type="button" class="lang-btn" data-lang="es">ES</button>
+    </div>
+    <button type="button" class="lab-btn lab-head-btn" id="labRefresh" aria-disabled="false" data-i18n="refresh" data-i18n-title="refresh_tip">Refresh</button>
+  </div>
 </header>
+<div class="lab-head-toolbar" id="labToolbar">
+  <div class="lab-head-controls" id="labControls">
+    <div class="lab-field" data-i18n-title="bench_tip">
+      <label for="labBench" data-i18n="bench_label">Benchmark index</label>
+      <select id="labBench" aria-describedby="labHeadHelp"></select>
+    </div>
+    <div class="lab-field" data-i18n-title="period_tip">
+      <label for="labPeriod" data-i18n="period_label">Period</label>
+      <select id="labPeriod" aria-describedby="labHeadHelp"></select>
+    </div>
+  </div>
+  <div class="lab-head-status" id="labStatus">
+    <span class="lab-asof" id="labAsOf" data-i18n-title="data_as_of_tip"></span>
+    <span class="lab-caches" id="labCaches" hidden></span>
+  </div>
+</div>
+<p class="lab-head-help" id="labHeadHelp" data-i18n="head_help"></p>
 <div class="lab-refresh-panel" id="labRefreshPanel" role="status" aria-live="polite" hidden></div>
 
 <div class="lab-layout">

@@ -2,7 +2,9 @@
 default to the files shipped with the repo (fictional demo data):
 
     LAB_CONFIG_DIR  config/lab/            config.json, blocks.json, scenarios.json, macro_rules.json
-    LEDGER_CSV      sample_data/ledger.csv operations ledger (clean CSV, see lab/ledger.py)
+    LEDGER_CSV      sample_data/ledger.csv history / opening positions (clean CSV, see lab/ledger.py)
+    INVESTMENTS_LEDGER_CSV  overrides config.json -> ledger_files (spreadsheet-export ledger,
+                    default sample_data/investments_ledger.csv; read in lab/ledger.py)
     PORTFOLIO_CSV   sample_data/portfolio.csv  current holdings, used to reconcile the ledger
 
 Runtime caches (downloaded prices, decision journal) live in data/lab/, which is git-ignored."""

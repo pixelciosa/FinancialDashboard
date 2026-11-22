@@ -323,7 +323,7 @@ MAIN_FIXTURE = os.path.join(FIXTURES, 'prices_2026-11-13.csv')
 
 
 def _ledger_available():
-    """The demo ledger (sample_data/ledger.csv, fictional) ships with the repo."""
+    """The demo ledger (sample_data/ledger.csv + investments_ledger.csv, fictional) ships with the repo."""
     return os.path.exists(ledger.LEDGER_PATH)
 
 

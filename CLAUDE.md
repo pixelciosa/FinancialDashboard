@@ -1,8 +1,8 @@
 # Financial Dashboard (demo edition)
 
-- **Datos**: ficticios, en `sample_data/` (rutas configurables con `PORTFOLIO_CSV`, `CASH_CSV`, `WATCHLIST_CSV`, `LEDGER_CSV`)
+- **Datos**: ficticios, en `sample_data/` (rutas configurables con `PORTFOLIO_CSV`, `CASH_CSV`, `WATCHLIST_CSV`, `LEDGER_CSV`, `INVESTMENTS_LEDGER_CSV`)
 - **Servidor**: `source venv/bin/activate && python server.py` en `http://localhost:5050`
-- **Tests**: `python -m pytest` (offline, ~2 s). Con red real: `python -m pytest -m live`
+- **Tests**: `python -m pytest` (offline, ~20 s, 853 tests). Con red real: `python -m pytest -m live`
 - **Plan y estado**: `tasks/todo.md` · **Lecciones**: `tasks/lessons.md` (locales, fuera de git)
 
 ## Objetivo
@@ -25,10 +25,17 @@ IA: Gemma vía NVIDIA (`NVIDIA_API_KEY` en `.env`) solo para texto narrativo.
 | `valuations.py` | Registro de valuaciones (Barata/Justa/Cara/Info no disponible) y actualización en lote con una sola descarga de precios |
 | `agent.py` | Portfolio Agent (chat): contexto desde las cachés, tablas armadas por el servidor, cifras verificadas |
 | `explore.py` | Modo Explorar: perfil del portfolio, screener de Yahoo (NYSE/Nasdaq), candidatos con el cálculo propio, motivos por plantilla, preferencias en `data/explore_profile.json` |
-| `index.html` | ~5.700 líneas. **No leerlo entero**: ubicar con `grep -n` y leer rangos |
+| `lab/` | Backend del Portfolio Lab: libro, motor, exposición, macro, estrés, diario. Blueprint en `/api/lab/*`. Skill `portfolio-lab` y README (sección Portfolio Lab) |
+| `lab_ui/` | UI del Lab en `/portfolio`: `index.html`, `lab.css`, `tokens.css`, `lab_app.js`, `lab_charts.js`, `lab_i18n.js` |
+| `index.html` | ~6.600 líneas. **No leerlo entero**: ubicar con `grep -n` y leer rangos |
 | `sample_data/` | CSV ficticios de la demo (portfolio, liquidez, watchlist, libro del Lab) |
 | `config/lab/` | Configuración del Portfolio Lab (bloques, escenarios, reglas macro, plataformas excluidas) |
 | `tests/` | Suite offline + `tests/live/` |
+
+## Portfolio Lab
+- Activo por defecto (`PORTFOLIO_LAB=0` lo desactiva). El libro se lee en cada pedido: historial/aperturas de `LEDGER_CSV` y libros de inversiones de `ledger_files` en `config/lab/config.json` (o `INVESTMENTS_LEDGER_CSV`).
+- Un servidor Flask con `debug=False` no recarga: tras cambiar código, reiniciarlo.
+- Verificar UI con Chrome headless desde Bash (`--headless=new --window-size=W,H --screenshot=...`).
 
 ## Reglas de oro
 1. **La IA nunca es fuente de un número.** Precios, métricas, trimestres y veredictos salen de

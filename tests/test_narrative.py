@@ -226,6 +226,28 @@ def test_without_api_key_no_http_and_marked_unavailable(client, fake_yf, sync_ex
     assert r['status'] == 'ready' and set(r['unavailable'].values()) == {'no_api_key'}
 
 
+def test_adding_api_key_regenerates_previous_failure(client, fake_yf, sync_exec, server_module, monkeypatch):
+    """Sin clave queda 'no_api_key'; al agregar la clave se regenera en lugar de servir el fallo."""
+    monkeypatch.setattr(server_module, 'NVIDIA_API_KEY', '')
+    client.get('/api/risk/ACME/narrative?lang=es')
+    failed = client.get('/api/risk/ACME/narrative?lang=es').get_json()
+    assert failed['status'] == 'ready' and set(failed['unavailable'].values()) == {'no_api_key'}
+    monkeypatch.setattr(server_module, 'NVIDIA_API_KEY', 'test-key')
+    monkeypatch.setattr(server_module, '_call_gemma', lambda prompt, **kw: json.dumps(GOOD_ES))
+    assert client.get('/api/risk/ACME/narrative?lang=es').get_json()['status'] == 'generating'
+    ready = client.get('/api/risk/ACME/narrative?lang=es').get_json()
+    assert ready['status'] == 'ready' and any(ready['fields'].values())
+
+
+def test_model_failure_is_retried_after_a_few_minutes():
+    """Un fallo del modelo se sirve unos minutos (sin bucle de reintentos) y luego deja de ser vigente."""
+    now = datetime.now(timezone.utc)
+    failed = {'inputs_hash': 'h', 'generated_at': (now - timedelta(minutes=nar.FAILURE_RETRY_MINUTES + 1)).isoformat(),
+              'fields': {f: None for f in nar.FIELDS}, 'unavailable': {f: 'model_error' for f in nar.FIELDS}}
+    assert nar.is_current(failed, 'h', now) is False
+    assert nar.is_current({**failed, 'generated_at': now.isoformat()}, 'h', now) is True
+
+
 def test_single_generation_in_flight(client, fake_yf, monkeypatch, gemma):
     jobs = []
     monkeypatch.setattr(nar, 'EXECUTOR', type('E', (), {'submit': lambda self, fn: jobs.append(fn)})())
@@ -239,3 +261,14 @@ def test_single_generation_in_flight(client, fake_yf, monkeypatch, gemma):
 def test_invalid_lang_falls_back_to_spanish(client, fake_yf, sync_exec, gemma):
     client.get('/api/risk/ACME/narrative?lang=xx')
     assert 'Spanish' in gemma[0]
+
+
+def test_clock_time_of_timestamps_is_not_a_fact():
+    """Regresión de la falla intermitente: el minuto/segundo de un sello ISO (23:37:37.76) caía en la
+    tolerancia de una cifra inventada (37.4) y la dejaba pasar solo en ciertos minutos del reloj."""
+    import narrative
+    stamp = 'risk_computed_at=2026-11-21T23:37:37.760931+00:00 as_of=2026-11-21T20:37 d=2026-11-21 x=2026-11-21 20:37:37'
+    nums = narrative.extract_numbers(stamp)
+    assert not any(36.8 <= n <= 38 for n in nums), nums
+    assert 2026.0 in nums
+    assert not narrative.is_grounded(37.4, nums)

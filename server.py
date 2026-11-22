@@ -91,7 +91,7 @@ def put_cached_ohlcv(ticker, interval, data):
 
 app = Flask(__name__)
 
-if os.environ.get('PORTFOLIO_LAB') == '1':
+if os.environ.get('PORTFOLIO_LAB', '1').strip().lower() not in ('0', 'false', 'off', 'no'):
     try:
         from lab.api import register as _register_lab
         _register_lab(app)
@@ -450,6 +450,12 @@ def portfolio():
                 'shares':       shares,
                 'costBasis':    pos.get('costBasis'),
                 'currentValue': cur_val,
+                # sin precio en vivo no se calcula nada: null explícito, nunca 0
+                'currentPrice':     None,
+                'unrealizedPnl':    None,
+                'unrealizedPnlPct': None,
+                'changePct':        None,
+                'change':           None,
                 'recovered':    bool(pos.get('costBasis') is not None and pos.get('costBasis') < 4 and shares and shares > 0.001),
             }
 
@@ -482,8 +488,8 @@ def portfolio():
                 'currentPrice':     None,
                 'currentValue':     round(val, 2),
                 'costBasis':        round(val, 2),
-                'unrealizedPnl':    0,
-                'unrealizedPnlPct': 0,
+                'unrealizedPnl':    None,
+                'unrealizedPnlPct': None,
                 'recovered':        False,
                 'changePct':        None,
                 'change':           None,
@@ -493,8 +499,27 @@ def portfolio():
         'ok':        True,
         'data':      result,
         'metadata':  TICKER_META,
+        'cryptoSymbols': sorted(set(COINGECKO_IDS) | set(CRYPTO_YF_SUFFIX)),
         'timestamp': datetime.now().strftime('%b %d %Y, %I:%M %p'),
     })
+
+
+def _portfolio_prompt_lines(positions):
+    """Líneas de texto para el prompt y total. Valor faltante = 'n/a' y no suma (nunca 0)."""
+    lines, total = [], 0
+    for ticker, pos in positions.items():
+        meta = TICKER_META.get(ticker, {})
+        val = pos.get('currentValue')
+        if val is None:
+            val = pos.get('costBasis')
+        if val is not None:
+            total += val
+        lines.append(
+            f"- {ticker} ({meta.get('name', ticker)}): shares {pos.get('shares', '?')}, "
+            f"type: {meta.get('type','Stock')}, sector: {meta.get('sector','Other')}, "
+            f"country: {meta.get('country','USA')}, value: {'n/a' if val is None else f'${val}'}"
+        )
+    return lines, total
 
 
 @app.route('/api/portfolio/analysis', methods=['POST', 'GET'])
@@ -508,17 +533,7 @@ def portfolio_analysis():
         lang = data.get('lang', 'es') if isinstance(data, dict) else 'es'
 
         positions = load_portfolio_from_csv()
-        pf_lines = []
-        total_val = 0
-        for ticker, pos in positions.items():
-            meta = TICKER_META.get(ticker, {})
-            val = pos.get('currentValue') or pos.get('costBasis') or 0
-            total_val += val
-            pf_lines.append(
-                f"- {ticker} ({meta.get('name', ticker)}): shares {pos.get('shares', '?')}, "
-                f"type: {meta.get('type','Stock')}, sector: {meta.get('sector','Other')}, "
-                f"country: {meta.get('country','USA')}, value: ${val}"
-            )
+        pf_lines, total_val = _portfolio_prompt_lines(positions)
 
         lang_instr = (
             "Write all text fields in Spanish (castellano)."
@@ -582,7 +597,8 @@ def refresh():
 
     for ticker in ALL_TICKERS:
         try:
-            t    = yf.Ticker(ticker)
+            yf_sym = f'{ticker}-USD' if ticker in CRYPTO_YF_SUFFIX else ticker
+            t    = yf.Ticker(yf_sym)
             info = t.info
 
             hist   = t.history(period='1y', interval='1mo')

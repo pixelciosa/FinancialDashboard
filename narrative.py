@@ -40,7 +40,9 @@ _INFLIGHT_LOCK = threading.Lock()
 
 # ── Números: extracción y verificación ──────────────────────────────────────
 
-_ISO_DATE = re.compile(r'\b(\d{4})-(\d{2})-(\d{2})\b')
+# Fecha ISO, con hora opcional (2026-11-21T23:50:37.76+00:00): la hora del reloj nunca es un "hecho".
+# Sin esto, minuto/segundo del sello (p. ej. 37) respaldaban por tolerancia una cifra inventada (37.4).
+_ISO_DATE = re.compile(r'\b(\d{4})-(\d{2})-(\d{2})(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?(?!\d)')
 _PERIOD = re.compile(r"\b(?:Q[1-4]\s?(?:FY)?'?\d{2,4}|FY\s?'?\d{2,4}|H[12]\s?\d{4})\b", re.I)
 # Número con o sin unidad pegada (1.5x, $6.86B, 200d); no dentro de palabras (COVID19).
 _NUM = re.compile(r'(?<![\w.])[-+−]?\d+(?:[.,]\d+)*')
@@ -160,7 +162,7 @@ def build_facts(report, fin_payload=None):
     """Texto con los datos calculados. Es lo único que ve el modelo y la base del validador."""
     fp = fin_payload or {}
     L = [f"TICKER: {report['ticker']} ({report.get('name')}) · kind {report['kind']} · {report.get('type') or ''}",
-         f"RISK SCORE: {report['risk_score']}/100 (0 = lowest risk) · level {report['level']} · "
+         f"RISK SCORE: {'n/a' if report['risk_score'] is None else report['risk_score']}/100 (0 = lowest risk) · level {report['level']} · "
          f"valuation {report.get('valuation_label') or 'n/a'} · data coverage {round(report['coverage'] * 100)}%"]
     for p in report['pillars']:
         parts = []
@@ -276,11 +278,26 @@ def write_cache(ticker, lang, data):
     os.replace(tmp, _path(ticker, lang))
 
 
+FAILURE_REASONS = {'no_api_key', 'model_error'}
+FAILURE_RETRY_MINUTES = 10  # un fallo se reintenta pasado este tiempo, sin esperar los MAX_AGE_DAYS
+
+
+def failure_reasons(cached):
+    """Motivos si ningun campo se genero por falta de clave o error del modelo; si no, None."""
+    if not cached or not cached.get('fields'):
+        return None
+    reasons = set((cached.get('unavailable') or {}).values())
+    if all(v is None for v in cached['fields'].values()) and reasons and reasons <= FAILURE_REASONS:
+        return reasons
+    return None
+
+
 def is_current(cached, inputs_hash, now=None):
     if not cached:
         return False
     now = now or datetime.now(timezone.utc)
-    young = now - datetime.fromisoformat(cached['generated_at']) < timedelta(days=MAX_AGE_DAYS)
+    max_age = timedelta(minutes=FAILURE_RETRY_MINUTES) if failure_reasons(cached) else timedelta(days=MAX_AGE_DAYS)
+    young = now - datetime.fromisoformat(cached['generated_at']) < max_age
     return young and cached.get('inputs_hash') == inputs_hash
 
 
@@ -309,6 +326,8 @@ def get_narrative(ticker, lang, report_fn, fin_fn, call_model, model_name=None, 
     ticker, lang = ticker.upper(), (lang if lang in LANG_NAME else 'es')
     report = report_fn(ticker)
     cached = read_cache(ticker, lang)
+    if call_model is not None and failure_reasons(cached) == {'no_api_key'}:
+        cached = None  # se agrego la clave: el fallo anterior ya no aplica
     if is_current(cached, report['inputs_hash'], now):
         return {'status': 'ready', **cached}
 

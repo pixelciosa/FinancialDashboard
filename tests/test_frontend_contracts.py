@@ -106,7 +106,13 @@ def test_every_api_call_has_a_route(index_html, server_module):
     calls = set(re.findall(r"""['"`](/api/[^'"`?\s]*)""", index_html))
     routes = _route_regexes(server_module)
     broken = []
+    # Las rutas del Lab (opcionales, PORTFOLIO_LAB) se verifican contra lab/api.py: bajo pytest
+    # tests/lab tapa al paquete `lab` y el blueprint no se registra en server.app.
+    lab_src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'lab', 'api.py'), encoding='utf-8').read()
+    lab_routes = {'/api/lab' + r for r in re.findall(r"lab_bp\.route\(\s*['\"]([^'\"]+)['\"]", lab_src)}
     for c in calls:
+        if c in lab_routes:
+            continue
         probe = re.sub(r'\$\{[^}]+\}', 'X', c)
         if probe.endswith('/'):
             probe += 'X'
@@ -146,6 +152,14 @@ def test_no_hardcoded_financial_data(index_html):
 
 def test_no_hardcoded_fiscal_years(index_html):
     assert "const YEARS  = ['FY21'" not in index_html and 'const YEARS = [' not in index_html
+
+
+def test_no_hardcoded_crypto_symbol_list(index_html):
+    # La lista de cripto viene de /api/portfolio (cryptoSymbols), no del frontend
+    assert 'resp.cryptoSymbols' in index_html
+    assert not re.search(r"\[\s*['\"](BTC|SOL|ADA|DOGE)['\"]\s*,\s*['\"][A-Z]{2,6}['\"]", index_html), \
+        'Lista de símbolos cripto hardcodeada'
+    assert not re.search(r"cryptoSyms\s*=\s*\[\s*['\"]", index_html)
 
 
 def _fn_body(html, signature):
@@ -365,3 +379,89 @@ def test_quote_ingestion_does_not_turn_null_into_zero(index_html):
     for pattern in (r'\bchg\s*\|\|\s*0', r'chgPct\s*\|\|\s*0', r'chg\s*\?\?\s*0', r'chg_pct\s*\?\?\s*0',
                     r'chgPct\s*\?\?\s*0', r'd\.price\s*\|\|\s*0'):
         assert not re.search(pattern, index_html), pattern
+
+
+@pytest.mark.skipif(not NODE, reason='node no instalado')
+def test_risk_score_null_renders_not_available(index_html, tmp_path):
+    """risk_score null (nivel 'insufficient'): ni gauge en 0, ni 'null', ni '0/100'."""
+    tr = _translations(index_html, tmp_path)
+    assert tr['en']['risk_score_na'] and tr['es']['risk_score_na']
+    src = f"""
+const TR = {json.dumps(tr)};
+const currentLang = 'es';
+const t = k => (TR[currentLang][k] !== undefined ? TR[currentLang][k] : k);
+{_fn_body(index_html, 'function finEsc(')}
+{_fn_body(index_html, 'function gaugeArc(')}
+{_fn_body(index_html, 'function riskGaugeValueSvg(')}
+{_fn_body(index_html, 'function riskScoreText(')}
+const na = riskGaugeValueSvg(null), txt = riskScoreText({{ risk_score: null }});
+const ok = riskGaugeValueSvg(42), okTxt = riskScoreText({{ risk_score: 42 }});
+const bad = [NaN, Infinity, -Infinity].map(v => [riskGaugeValueSvg(v), riskScoreText({{ risk_score: v }})]);
+const zero = [riskGaugeValueSvg(0), riskScoreText({{ risk_score: 0 }})];
+process.stdout.write(JSON.stringify({{ na, txt, ok, okTxt, bad, zero }}));
+"""
+    f = tmp_path / 'risk_null.js'
+    f.write_text(src, encoding='utf-8')
+    res = subprocess.run([NODE, str(f)], capture_output=True, text=True, timeout=30)
+    assert res.returncode == 0, res.stderr
+    o = json.loads(res.stdout)
+    assert 'No disponible' in o['na'] and 'garc-risk' not in o['na'] and '/ 100' not in o['na']
+    assert o['txt'] == 'No disponible'
+    for s in (o['na'], o['txt']):
+        assert 'null' not in s and '0/100' not in s and 'NaN' not in s
+    assert '>42<' in o['ok'] and o['okTxt'] == '42/100'
+    # 0 real es valido: dibuja el gauge y muestra 0/100
+    assert 'garc-risk' in o['zero'][0] and o['zero'][1] == '0/100'
+    # NaN / Infinity / -Infinity se tratan como no disponible
+    assert len(o['bad']) == 3
+    for svg, txt in o['bad']:
+        assert 'No disponible' in svg and txt == 'No disponible'
+        for s in (svg, txt):
+            assert 'NaN' not in s and 'Infinity' not in s
+            assert 'garc-risk' not in s and '/ 100' not in s
+
+
+def test_risk_score_not_interpolated_raw(index_html):
+    """Ningún render interpola d.risk_score directo (con null saldría 'null')."""
+    body = _fn_body(index_html, 'function renderRiskOverview(')
+    assert index_html.count('${d.risk_score}') == 1  # solo dentro de riskScoreText, protegido por Number.isFinite
+    assert '${score}/100' not in body
+    assert "Number.isFinite(score) ? `<div class=\"rptr\"" in body
+
+
+def _run_lab_link(index_html, fetch_js):
+    import json, shutil, subprocess
+    if not shutil.which('node'):
+        pytest.skip('node no disponible')
+    body = _fn_body(index_html, 'async function initLabLink(')
+    script = (
+        "const link={hidden:true,style:{display:'none'}};\n"
+        "global.document={getElementById:id=>id==='pfLabLink'?link:null};\n"
+        "global.fetch=" + fetch_js + ";\n" + body +
+        "\ninitLabLink().then(()=>console.log(JSON.stringify({hidden:link.hidden,display:link.style.display})));"
+    )
+    out = subprocess.run(['node', '-e', script], capture_output=True, text=True, timeout=20)
+    assert out.returncode == 0, out.stderr
+    return json.loads(out.stdout.strip())
+
+
+def test_lab_link_hidden_by_default_in_markup(index_html):
+    i = index_html.index('id="pfLabLink"')
+    tag = index_html[index_html.rindex('<a ', 0, i):index_html.index('>', i)]
+    assert 'hidden' in tag and 'display:none' in tag
+    assert 'initLabLink()' in _fn_body(index_html, 'async function init(')
+
+
+def test_lab_link_shown_only_when_health_ok(index_html):
+    r = _run_lab_link(index_html, "async()=>({ok:true,status:200,json:async()=>({ok:true,phase:0})})")
+    assert r == {'hidden': False, 'display': ''}
+
+
+@pytest.mark.parametrize('fetch_js', [
+    "async()=>({ok:false,status:404,json:async()=>({})})",
+    "async()=>({ok:true,status:200,json:async()=>({ok:false})})",
+    "async()=>{throw new Error('network')}",
+])
+def test_lab_link_stays_hidden_on_404_false_or_error(index_html, fetch_js):
+    r = _run_lab_link(index_html, fetch_js)
+    assert r == {'hidden': True, 'display': 'none'}

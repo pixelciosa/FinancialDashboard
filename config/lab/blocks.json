@@ -27,7 +27,7 @@
       ],
       "indice_proxy": "SPY",
       "bandas": {
-        "referencia_pct": 24.6
+        "referencia_pct": 25.1
       }
     },
     {
@@ -40,7 +40,7 @@
       ],
       "indice_proxy": "QQQ",
       "bandas": {
-        "referencia_pct": 28.3
+        "referencia_pct": 27.9
       }
     },
     {
@@ -53,7 +53,7 @@
       ],
       "indice_proxy": "XLP",
       "bandas": {
-        "referencia_pct": 14.0
+        "referencia_pct": 14.4
       }
     },
     {
@@ -65,7 +65,7 @@
       ],
       "indice_proxy": "SPY",
       "bandas": {
-        "referencia_pct": 29.1
+        "referencia_pct": 28.7
       }
     },
     {

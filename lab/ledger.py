@@ -1,20 +1,43 @@
-"""Operations ledger of the Lab: parser of the clean CSV format, loader and reconciliation against
-the current holdings. Pure functions (they take text/paths and return data). Does not import
-server.py. Missing data is None, never 0 (except an explicit zero cost).
+"""Operations ledger of the Lab: parser of the investments ledger (spreadsheet export), reader
+of the opening/history file, loader and reconciliation against the current holdings. Pure functions
+(they take text/paths and return data). Does not import server.py. Missing data is None, never 0
+(except an explicit zero cost).
 
-Ledger format (`LEDGER_CSV`, default sample_data/ledger.csv), semicolon-separated, UTF-8:
+The Lab reads two kinds of input (same split as the private edition: a history file + the
+investments ledger exported from a spreadsheet):
 
-    fecha;ticker;cantidad;precio_unitario_usd;monto_usd;origen[;plataforma]
+1. History / opening positions (`LEDGER_CSV`, default sample_data/ledger.csv), clean CSV:
 
-- fecha: YYYY-MM-DD.
-- ticker: as in the portfolio CSV; crypto with or without the -USD suffix.
-- cantidad: units; negative for sales (a 'venta' with a positive quantity is negated).
-- precio_unitario_usd / monto_usd: optional; monto_usd is the absolute cash flow of the operation.
-- origen: apertura | compra | venta | dividendo (units received at zero cost) |
-          dividendo_efectivo (cash income, no units: cantidad may be empty).
-- plataforma (optional): broker or exchange. Rows from a platform listed in
-  config.json -> `excluded_platforms` are left out of the Lab (out of scope) but remembered, so the
-  reconciliation can explain the gap with the portfolio as 'esperada_excluida'.
+       fecha;ticker;cantidad;precio_unitario_usd;monto_usd;origen[;plataforma]
+
+   - fecha YYYY-MM-DD; cantidad negative for sales; monto_usd is the absolute cash flow.
+   - origen: apertura | compra | venta | dividendo (units at zero cost) |
+             dividendo_efectivo (cash income, no units).
+
+2. Investments ledger files (spreadsheet export, e.g. Numbers/Excel "CSV with ;"), listed in
+   config/lab/config.json -> `ledger_files` (paths relative to the project or to `ledger_dir`), or
+   in the env var INVESTMENTS_LEDGER_CSV (several paths separated by the OS path separator).
+   Default demo file: sample_data/investments_ledger.csv (fictional). One header row, then:
+
+       Fecha;Activo;Símbolo;Tipo de Operación;Tipo de Activo;Cantidad;Plataforma;
+       Precio en USD (MEP);Precio en moneda de cambio;Moneda de cambio;Inversión en dólares[;...]
+
+   - Only the first 11 columns are read (market value / ratio columns after them are ignored).
+   - Fecha d/m/yy or d/m/yyyy. Numbers in Spanish locale: '1.234,56', 'US$\\t(150,00)' (parentheses
+     or '-' = negative); the amount is always taken as absolute.
+   - Tipo de Operación: Compra | Venta | Dividendos (with Cantidad: units at zero cost; without it:
+     cash income from 'Inversión en dólares').
+   - Tipo de Activo 'Stable' (stablecoins) is cash, not an investment: skipped and counted.
+   - Moneda de cambio: a cash currency (USD, USDT, USDC, ARS...) or another asset. Paying with
+     another asset is a swap ('canje'): a sale leg of that asset is generated with
+     quantity = Cantidad x 'Precio en moneda de cambio'.
+   - Plataforma: rows from `excluded_platforms` are out of the Lab's scope but remembered, so the
+     reconciliation can explain a gap as 'esperada_excluida'. When `included_platforms` is not
+     empty, any other platform is a row error (catches typos).
+   - Holder ('titular'): `titular` of the ledger_files entry, else the part of the file name after
+     the last '-' ('investments 26-HolderA.csv' -> 'HolderA'), else None.
+   Symbols are normalized (spaces removed, upper case, '-USD' suffix dropped). A bad row never
+   aborts the rest: it is reported in `errors` with its line number.
 """
 import csv
 import io
@@ -31,11 +54,19 @@ DATA_DIR = paths.DATA_DIR
 CONFIG_PATH = paths.config_file('config.json')
 LEDGER_PATH = paths.LEDGER_CSV
 PORTFOLIO_CSV = paths.PORTFOLIO_CSV
+INVESTMENTS_ENV = 'INVESTMENTS_LEDGER_CSV'
 
 TIPOS = ('apertura', 'compra', 'venta', 'canje', 'dividendo_unidades', 'dividendo_efectivo')
 ORIGENES = {'apertura': 'apertura', 'compra': 'compra', 'venta': 'venta',
             'dividendo': 'dividendo_unidades', 'dividendo_efectivo': 'dividendo_efectivo'}
 REQUIRED_COLUMNS = ('fecha', 'ticker', 'cantidad', 'precio_unitario_usd', 'monto_usd', 'origen')
+
+# Investments ledger (spreadsheet export): column positions, only up to "Inversion en dolares".
+(COL_FECHA, COL_ACTIVO, COL_SIMBOLO, COL_OP, COL_TIPO_ACTIVO, COL_CANT, COL_PLAT,
+ COL_PRECIO, COL_PRECIO_CAMBIO, COL_MONEDA, COL_INV) = range(11)
+LEDGER_MIN_COLS = 11
+# Exchange currencies that are NOT invested assets (anything else, if not empty => swap)
+NON_INVESTED_CURRENCIES = {'USD', 'USDC', 'USDT', 'USDX', 'DAI', 'PESOS', 'ARS', 'EUR', 'BRL', ''}
 
 
 def _clean_num(x):
@@ -49,24 +80,52 @@ def _clean_num(x):
     return f if math.isfinite(f) else None
 
 
-def parse_number(s):
-    """'1234.5', '(1,234.50)', 'US$ 12' -> float. Empty -> None. Garbage -> ValueError.
-    Dot is the decimal separator; commas are thousands separators."""
-    if s is None:
-        return None
-    t = re.sub(r'US\$|\$|\s|\xa0', '', str(s))
-    if t == '':
-        return None
+def _parse_signed(t):
     neg = False
     if t.startswith('(') and t.endswith(')'):
         neg, t = True, t[1:-1]
     if t.startswith('-'):
         neg, t = True, t[1:]
-    t = t.replace(',', '')
-    v = float(t)  # ValueError on garbage
+    return neg, t
+
+
+def parse_number(s):
+    """History file numbers: '1234.5', '(1,234.50)', 'US$ 12' -> float. Empty -> None.
+    Garbage -> ValueError. Dot is the decimal separator; commas are thousands separators."""
+    if s is None:
+        return None
+    t = re.sub(r'US\$|\$|\s|\xa0', '', str(s))
+    if t == '':
+        return None
+    neg, t = _parse_signed(t)
+    v = float(t.replace(',', ''))  # ValueError on garbage
     if not math.isfinite(v):
         raise ValueError('non-finite number')
     return -v if neg else v
+
+
+def parse_number_es(s):
+    """Investments ledger numbers (Spanish locale): 'US$\\t(1.234,50)' -> -1234.5,
+    '0,25' -> 0.25. Empty -> None. Garbage -> ValueError."""
+    if s is None:
+        return None
+    t = re.sub(r'US\$|\$|\s|\xa0', '', str(s))
+    if t == '':
+        return None
+    neg, t = _parse_signed(t)
+    v = float(t.replace('.', '').replace(',', '.'))  # ValueError on garbage
+    if not math.isfinite(v):
+        raise ValueError('non-finite number')
+    return -v if neg else v
+
+
+def parse_date_dmy(s):
+    """'13/1/26' -> '2026-01-13'. Two- or four-digit year. Invalid date -> ValueError."""
+    d, m, y = [p.strip() for p in str(s).split('/')]
+    y = int(y)
+    if y < 100:
+        y += 2000
+    return datetime(y, int(m), int(d)).strftime('%Y-%m-%d')
 
 
 def normalize_symbol(s):
@@ -76,24 +135,24 @@ def normalize_symbol(s):
     return t
 
 
-def _op(fecha, ticker, cantidad, precio, monto, tipo, plataforma, origen, nota=None):
+def _op(fecha, ticker, cantidad, precio, monto, tipo, plataforma, origen, nota=None, titular=None):
     return {'fecha': fecha, 'ticker': ticker, 'cantidad': _clean_num(cantidad),
             'precio_usd': _clean_num(precio), 'monto_usd': _clean_num(monto), 'tipo': tipo,
-            'plataforma': plataforma, 'origen': origen, 'nota': nota}
+            'plataforma': plataforma, 'titular': titular, 'origen': origen, 'nota': nota}
 
 
-def _norm_platforms(excluded):
-    return {str(p).strip().lower() for p in (excluded or []) if str(p).strip()}
+def _norm_platforms(platforms):
+    return {str(p).strip().lower(): str(p).strip() for p in (platforms or []) if str(p).strip()}
 
 
-def parse_ledger_text(text, excluded_platforms=()):
-    """Parse a ledger CSV.
+def parse_history_text(text, excluded_platforms=()):
+    """Parse the history / opening-positions CSV (clean format, see the module docstring).
 
     Returns {'ops', 'errors': [{'fila', 'error'}], 'excluded': {'plataforma_excluida', 'vacias'},
     'excluded_ops': [{'ticker', 'cantidad', 'plataforma'}]}. A bad row never aborts the rest."""
-    if text.startswith('﻿'):
+    if text.startswith('\ufeff'):
         text = text[1:]
-    excluded_set = _norm_platforms(excluded_platforms)
+    excluded_set = set(_norm_platforms(excluded_platforms))
     ops, errors, excluded_ops = [], [], []
     excl = {'plataforma_excluida': 0, 'vacias': 0}
     reader = csv.DictReader(io.StringIO(text, newline=''), delimiter=';')
@@ -157,6 +216,108 @@ def parse_ledger_text(text, excluded_platforms=()):
     return {'ops': ops, 'errors': errors, 'excluded': excl, 'excluded_ops': excluded_ops}
 
 
+def _record_excluded(acc, row, plat):
+    """Ticker and signed quantity (buy +, sell -) of an excluded-platform row; unreadable rows are skipped."""
+    try:
+        tipo_op = row[COL_OP].strip().lower()
+        if tipo_op not in ('compra', 'venta'):
+            return
+        ticker = normalize_symbol(row[COL_SIMBOLO])
+        qty = parse_number_es(row[COL_CANT])
+        if not ticker or qty is None or qty == 0:
+            return
+        acc.append({'ticker': ticker, 'cantidad': -abs(qty) if tipo_op == 'venta' else abs(qty),
+                    'plataforma': plat})
+    except (ValueError, IndexError):
+        return
+
+
+def parse_ledger_text(text, titular=None, excluded_platforms=(), included_platforms=(),
+                      origen='libro'):
+    """Parse one investments ledger export (spreadsheet format, see the module docstring).
+
+    Returns {'ops', 'errors': [{'fila', 'error'}],
+             'excluded': {'plataforma_excluida', 'stable', 'vacias'},
+             'excluded_ops': [{'ticker', 'cantidad', 'plataforma'}]}. A bad row never aborts the rest."""
+    if text.startswith('\ufeff'):
+        text = text[1:]
+    excluded_map = _norm_platforms(excluded_platforms)
+    included_map = _norm_platforms(included_platforms)
+    ops, errors, excluded_ops = [], [], []
+    excl = {'plataforma_excluida': 0, 'stable': 0, 'vacias': 0}
+    reader = csv.reader(io.StringIO(text, newline=''), delimiter=';')
+    first = True
+    for row in reader:
+        lineno = reader.line_num
+        if first:
+            first = False
+            continue  # header
+        row = row[:LEDGER_MIN_COLS]  # market value / ratio columns are ignored
+        if not any(c.strip() for c in row):
+            excl['vacias'] += 1
+            continue
+        if len(row) < LEDGER_MIN_COLS:
+            errors.append({'fila': lineno, 'error': 'row has fewer columns than expected'})
+            continue
+        try:
+            plat_raw = row[COL_PLAT].strip()
+            key = plat_raw.lower()
+            if key in excluded_map:
+                excl['plataforma_excluida'] += 1
+                _record_excluded(excluded_ops, row, plat_raw)
+                continue
+            if included_map and key not in included_map:
+                raise ValueError(f'unknown platform: {plat_raw!r}')
+            if row[COL_TIPO_ACTIVO].strip().lower() == 'stable':
+                excl['stable'] += 1
+                continue
+            plat = included_map.get(key) or plat_raw or None
+            fecha = parse_date_dmy(row[COL_FECHA])
+            ticker = normalize_symbol(row[COL_SIMBOLO])
+            if not ticker:
+                raise ValueError('empty symbol')
+            tipo_op = row[COL_OP].strip().lower()
+            qty = parse_number_es(row[COL_CANT])
+            precio = parse_number_es(row[COL_PRECIO])
+            inv = parse_number_es(row[COL_INV])
+            monto = abs(inv) if inv is not None else None
+            moneda = row[COL_MONEDA].strip()
+            if tipo_op in ('compra', 'venta'):
+                if qty is None or qty == 0:
+                    raise ValueError('quantity missing')
+                qty = -abs(qty) if tipo_op == 'venta' else abs(qty)
+                if monto is None:
+                    raise ValueError('investment in dollars missing')
+                if moneda.upper() not in NON_INVESTED_CURRENCIES:
+                    # Swap: paid with another asset -> sale leg of the asset handed over.
+                    cambio = normalize_symbol(moneda)
+                    pc = parse_number_es(row[COL_PRECIO_CAMBIO])
+                    if pc is None:
+                        raise ValueError('swap without price in the exchange currency')
+                    leg_qty = abs(qty) * pc
+                    ops.append(_op(fecha, ticker, qty, precio, monto, tipo_op, plat, origen,
+                                   f'swap against {cambio}', titular))
+                    ops.append(_op(fecha, cambio, -leg_qty, monto / leg_qty if leg_qty else None,
+                                   monto, 'canje', plat, origen,
+                                   f'sale leg of the swap for {ticker}', titular))
+                    continue
+                ops.append(_op(fecha, ticker, qty, precio, monto, tipo_op, plat, origen, None, titular))
+            elif tipo_op in ('dividendos', 'dividendo'):
+                if qty is not None and qty != 0:
+                    ops.append(_op(fecha, ticker, abs(qty), 0.0, 0.0, 'dividendo_unidades',
+                                   plat, origen, 'units at zero cost', titular))
+                else:
+                    if monto is None:
+                        raise ValueError('dividend without quantity or amount')
+                    ops.append(_op(fecha, ticker, None, None, monto, 'dividendo_efectivo',
+                                   plat, origen, 'income, not a flow', titular))
+            else:
+                raise ValueError(f'unknown operation type: {row[COL_OP]!r}')
+        except (ValueError, IndexError) as e:
+            errors.append({'fila': lineno, 'error': str(e)})
+    return {'ops': ops, 'errors': errors, 'excluded': excl, 'excluded_ops': excluded_ops}
+
+
 def load_config(path=None):
     with open(path or CONFIG_PATH, encoding='utf-8') as f:
         return json.load(f)
@@ -199,36 +360,97 @@ def trimmed_sales(clipped, threshold_pct):
     return {'umbral_pct': threshold_pct, 'lista': lista, 'bajo_umbral': bajo}
 
 
+def _cfg_list(cfg, key):
+    v = (cfg or {}).get(key) or []
+    return [str(p) for p in v] if isinstance(v, list) else []
+
+
 def excluded_platforms(config=None):
     try:
         cfg = config if config is not None else load_config()
     except (OSError, ValueError):
         return []
-    v = cfg.get('excluded_platforms') or []
-    return [str(p) for p in v] if isinstance(v, list) else []
+    return _cfg_list(cfg, 'excluded_platforms')
 
 
-def load_ledger(config=None, ledger_path=None):
-    """Load the ledger file. A missing file is reported in `errors`, never raised."""
+def titular_from_filename(name):
+    """Holder label from the file name: the part after the last '-' ('inv 26-HolderA.csv' -> 'HolderA')."""
+    stem = os.path.splitext(os.path.basename(str(name or '')))[0]
+    if '-' not in stem:
+        return None
+    t = stem.rsplit('-', 1)[1].strip()
+    return t or None
+
+
+def ledger_files(config=None):
+    """Investments ledger files as [{'path' (absolute), 'name', 'titular'}].
+
+    INVESTMENTS_LEDGER_CSV (paths separated by os.pathsep) wins over config.json -> `ledger_files`.
+    Relative paths resolve against `ledger_dir` (if set) or the project root."""
+    cfg = config or {}
+    env = os.environ.get(INVESTMENTS_ENV)
+    if env:
+        entries = [p for p in env.split(os.pathsep) if p.strip()]
+    else:
+        entries = cfg.get('ledger_files') or []
+    base = cfg.get('ledger_dir') or ''
+    base = base if os.path.isabs(base) else os.path.join(ROOT, base)
+    out = []
+    for e in entries if isinstance(entries, list) else []:
+        if isinstance(e, dict):
+            rel, titular = str(e.get('path') or ''), e.get('titular')
+        else:
+            rel, titular = str(e), None
+        if not rel.strip():
+            continue
+        path = rel if os.path.isabs(rel) else os.path.join(base, rel)
+        out.append({'path': path, 'name': os.path.basename(path),
+                    'titular': titular if titular else titular_from_filename(path)})
+    return out
+
+
+def load_ledger(config=None, history_path=None):
+    """Load the history file (LEDGER_CSV) and every investments ledger file.
+    Missing files are reported in `errors`, never raised."""
     try:
         cfg = config if config is not None else load_config()
     except (OSError, ValueError):
         cfg = {}
-    path = ledger_path or LEDGER_PATH
-    name = os.path.basename(path)
+    excluded = _cfg_list(cfg, 'excluded_platforms')
+    included = _cfg_list(cfg, 'included_platforms')
     ops, errors, excluded_ops = [], [], []
-    counts = {'excluidas': {'plataforma_excluida': 0, 'vacias': 0}, 'por_archivo': {}}
-    if os.path.exists(path):
-        with open(path, encoding='utf-8-sig', newline='') as f:
-            res = parse_ledger_text(f.read(), excluded_platforms(cfg))
-        ops = res['ops']
-        excluded_ops = res['excluded_ops']
-        counts['por_archivo'][name] = len(ops)
-        counts['excluidas'] = res['excluded']
-        errors += [dict(e, archivo=name) for e in res['errors']]
+    counts = {'historial': 0, 'excluidas': {'plataforma_excluida': 0, 'stable': 0, 'vacias': 0},
+              'por_archivo': {}}
+
+    def _add_excluded(res):
+        for k, v in res['excluded'].items():
+            counts['excluidas'][k] = counts['excluidas'].get(k, 0) + v
+
+    hpath = history_path or LEDGER_PATH
+    hname = os.path.basename(hpath)
+    if os.path.exists(hpath):
+        with open(hpath, encoding='utf-8-sig', newline='') as f:
+            h = parse_history_text(f.read(), excluded)
+        ops += h['ops']
+        excluded_ops += h['excluded_ops']
+        counts['historial'] = len(h['ops'])
+        _add_excluded(h)
+        errors += [dict(e, archivo=hname) for e in h['errors']]
     else:
-        errors.append({'archivo': name, 'fila': None, 'error': 'file not found'})
-        counts['por_archivo'][name] = None
+        errors.append({'archivo': hname, 'fila': None, 'error': 'file not found'})
+    for lf in ledger_files(cfg):
+        name = lf['name']
+        if not os.path.exists(lf['path']):
+            errors.append({'archivo': name, 'fila': None, 'error': 'file not found'})
+            counts['por_archivo'][name] = None
+            continue
+        with open(lf['path'], encoding='utf-8-sig', newline='') as f:
+            res = parse_ledger_text(f.read(), lf['titular'], excluded, included)
+        ops += res['ops']
+        excluded_ops += res['excluded_ops']
+        counts['por_archivo'][name] = len(res['ops'])
+        _add_excluded(res)
+        errors += [dict(e, archivo=name) for e in res['errors']]
     ops.sort(key=lambda o: o['fecha'])
     counts['total'] = len(ops)
     # Cash dividends are income, not operations/flows: they do not count as an operation.

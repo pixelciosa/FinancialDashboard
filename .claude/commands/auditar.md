@@ -7,7 +7,7 @@ Auditá el ticker **$ARGUMENTS** sin modificar archivos. Usá la red real; no us
 
 1. Con `venv/bin/python`, en un solo script corto:
    - Llamá a los endpoints con `server.app.test_client()`: `/api/financials/$ARGUMENTS`,
-     `/api/report/$ARGUMENTS` y, si existe, `/api/financials/status?tickers=$ARGUMENTS`.
+     `/api/risk/$ARGUMENTS` y `/api/financials/status?tickers=$ARGUMENTS`.
    - Traé la fuente cruda: `yf.Ticker(sym)` con `-USD` si es cripto: `info`, `income_stmt`,
      `quarterly_income_stmt`, `cashflow`, `calendar`.
 2. Compará y reportá en una tabla: métrica · dashboard · fuente · diferencia · OK/ERROR.

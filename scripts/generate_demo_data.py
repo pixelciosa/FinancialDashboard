@@ -4,8 +4,10 @@ Everything this script writes is synthetic:
 - Demo tickers get seeded random-walk prices (geometric, correlated with SPY or BTC-USD through a
   fixed beta). They are NOT real market prices. Benchmark/index columns already present in the
   fixtures (SPY, QQQ, sector ETFs, GLD, BTC-USD...) are kept as they are.
-- sample_data/ledger.csv is a fictional list of operations priced at those synthetic closes, and
-  sample_data/portfolio.csv holds the resulting quantities with an average-cost basis.
+- sample_data/ledger.csv (opening positions, clean format) and sample_data/investments_ledger.csv
+  (2025-2026 operations in the spreadsheet-export format: Spanish-locale numbers, d/m/yy dates,
+  stablecoin rows, a swap, dividends, an excluded platform) are fictional, priced at those synthetic
+  closes; sample_data/portfolio.csv holds the resulting quantities with an average-cost basis.
 - config/lab/blocks.json gets reference weights equal to the block weights on the last fixture day.
 
 Usage:  python scripts/generate_demo_data.py      (deterministic: fixed seed)
@@ -48,29 +50,62 @@ INDEX_COLUMNS = ['SPY', 'QQQ', 'XLK', 'SMH', 'XLC', 'XLY', 'XLF', 'XLV', 'XLI', 
                  'XLU', 'XLRE', 'GLD', 'SPYD', 'EWZ', 'ARGT', 'BTC-USD']
 STRESS_PROXIES = ['SPY', 'QQQ', 'XLP', 'SMH', 'GLD', 'BTC-USD']
 
-# Fictional operations: (date, ticker, quantity, origen, platform). Prices come from the synthetic
-# closes. 'BankC' is listed in config/lab/config.json -> excluded_platforms (out of the Lab's scope).
+# Fictional operations. Opening positions go to the history file (sample_data/ledger.csv, clean
+# format); everything else goes to the investments ledger (sample_data/investments_ledger.csv, the
+# spreadsheet-export format read by lab/ledger.py). Prices come from the synthetic closes.
+# kind: apertura | compra | venta | div_unidades | div_efectivo | stable | canje (buy `t` paying with
+# `paid` units of another asset) | blank. 'BankC' is listed in config/lab/config.json ->
+# excluded_platforms (out of the Lab's scope): its NU rows explain the reconciliation gap.
+OPENING = [('VTI', 10), ('JPM', 8), ('JNJ', 10), ('BND', 20), ('SOL', 6), ('ADA', 2000)]
+OPENING_DATE = '2025-01-02'
 OPS = [
-    ('2025-01-02', 'VTI', 10, 'apertura', ''), ('2025-01-02', 'JPM', 8, 'apertura', ''),
-    ('2025-01-02', 'JNJ', 10, 'apertura', ''), ('2025-01-02', 'BND', 20, 'apertura', ''),
-    ('2025-01-02', 'SOL', 6, 'apertura', ''), ('2025-01-02', 'ADA', 2000, 'apertura', ''),
-    ('2025-02-03', 'ORCL', 5, 'compra', 'BrokerA'), ('2025-02-18', 'COST', 2, 'compra', 'BrokerA'),
-    ('2025-03-03', 'VNQ', 12, 'compra', 'BrokerA'), ('2025-03-17', 'CRM', 4, 'compra', 'BrokerA'),
-    ('2025-04-07', 'VTI', 3, 'compra', 'BrokerA'), ('2025-04-08', 'SOL', 4, 'compra', 'ExchangeB'),
-    ('2025-04-21', 'JPM', 6, 'compra', 'BrokerA'), ('2025-05-06', 'HD', 3, 'compra', 'BrokerA'),
-    ('2025-05-20', 'NU', 60, 'compra', 'BrokerA'), ('2025-06-10', 'ADA', 1500, 'compra', 'ExchangeB'),
-    ('2025-06-10', 'JNJ', None, 'dividendo_efectivo', 'BrokerA'),
-    ('2025-07-01', 'NFLX', 15, 'compra', 'BrokerA'), ('2025-08-05', 'BND', 10, 'compra', 'BrokerA'),
-    ('2025-09-15', 'SOL', -0.5, 'venta', 'ExchangeB'), ('2025-09-22', 'ORCL', 3, 'compra', 'BrokerA'),
-    ('2025-10-07', 'NU', 50, 'compra', 'BankC'), ('2025-10-14', 'VTI', 2, 'compra', 'BrokerA'),
-    ('2025-11-03', 'VNQ', 8, 'compra', 'BrokerA'), ('2025-12-29', 'BND', None, 'dividendo_efectivo', 'BrokerA'),
-    ('2026-01-20', 'JPM', -2, 'venta', 'BrokerA'), ('2026-02-10', 'ADA', -500, 'venta', 'ExchangeB'),
-    ('2026-03-02', 'SOL', 0.5, 'dividendo', 'ExchangeB'), ('2026-03-16', 'NFLX', 8, 'compra', 'BrokerA'),
-    ('2026-04-14', 'NU', 40, 'compra', 'BrokerA'), ('2026-04-30', 'JPM', None, 'dividendo_efectivo', 'BrokerA'),
-    ('2026-05-12', 'COST', 1, 'compra', 'BrokerA'), ('2026-06-15', 'CRM', 3, 'compra', 'BrokerA'),
-    ('2026-07-07', 'HD', 2, 'compra', 'BrokerA'), ('2026-08-18', 'NFLX', -3, 'venta', 'BrokerA'),
+    # (date, kind, ticker, quantity, platform, extra)
+    ('2025-02-03', 'compra', 'ORCL', 5, 'BrokerA', None),
+    ('2025-02-18', 'compra', 'COST', 2, 'BrokerA', None),
+    ('2025-03-03', 'compra', 'VNQ', 12, 'BrokerA', None),
+    ('2025-03-17', 'compra', 'CRM', 4, 'BrokerA', None),
+    ('2025-04-01', 'stable', 'USDT', 500, 'ExchangeB', None),
+    ('2025-04-07', 'compra', 'VTI', 3, 'BrokerA', 'multiline'),
+    ('2025-04-08', 'compra', 'SOL', 4, 'ExchangeB', None),
+    ('2025-04-21', 'compra', 'JPM', 6, 'BrokerA', None),
+    ('2025-05-06', 'compra', 'HD', 3, 'BrokerA', None),
+    ('2025-05-20', 'compra', 'NU', 60, 'BrokerA', None),
+    ('2025-06-10', 'compra', 'ADA', 1500, 'ExchangeB', None),
+    ('2025-06-10', 'div_efectivo', 'JNJ', 12.40, 'BrokerA', None),
+    ('2025-07-01', 'compra', 'NFLX', 15, 'BrokerA', None),
+    ('2025-08-05', 'compra', 'BND', 10, 'BrokerA', None),
+    ('2025-09-15', 'venta', 'SOL', 0.5, 'ExchangeB', None),
+    ('2025-09-22', 'compra', 'ORCL', 3, 'BrokerA', None),
+    ('2025-09-30', 'div_efectivo', 'VTI', 9.85, 'BrokerA', None),
+    ('2025-10-07', 'compra', 'NU', 50, 'BankC', None),
+    ('2025-10-14', 'compra', 'VTI', 2, 'BrokerA', None),
+    ('2025-11-03', 'compra', 'VNQ', 8, 'BrokerA', None),
+    ('2025-12-01', 'div_unidades', 'ADA', 25, 'ExchangeB', None),
+    ('2025-12-15', 'compra', 'JNJ', 2, 'BrokerA', None),
+    ('2025-12-29', 'div_efectivo', 'BND', 52.10, 'BrokerA', None),
+    (None, 'blank', None, None, None, None),
+    ('2026-01-05', 'stable', 'USDT', 300, 'ExchangeB', None),
+    ('2026-01-20', 'venta', 'JPM', 2, 'BrokerA', None),
+    ('2026-02-10', 'venta', 'ADA', 500, 'ExchangeB', None),
+    ('2026-03-02', 'div_unidades', 'SOL', 0.5, 'ExchangeB', None),
+    ('2026-03-16', 'compra', 'NFLX', 8, 'BrokerA', None),
+    ('2026-04-14', 'compra', 'NU', 40, 'BrokerA', None),
+    ('2026-04-30', 'div_efectivo', 'JPM', 18.00, 'BrokerA', None),
+    ('2026-05-12', 'compra', 'COST', 1, 'BrokerA', None),
+    ('2026-06-15', 'compra', 'CRM', 3, 'BrokerA', None),
+    ('2026-06-30', 'div_efectivo', 'VNQ', 21.30, 'BrokerA', None),
+    ('2026-07-07', 'compra', 'HD', 2, 'BrokerA', None),
+    ('2026-07-20', 'venta', 'NU', 5, 'BankC', None),
+    ('2026-08-18', 'venta', 'NFLX', 3, 'BrokerA', None),
+    ('2026-09-08', 'canje', 'SOL', None, 'ExchangeB', ('ADA', 300)),
+    ('2026-09-15', 'div_efectivo', 'COST', 4.65, 'BrokerA', None),
+    ('2026-10-06', 'compra', 'BND', 5, 'BrokerA', None),
 ]
-CASH_DIVIDENDS = {('2025-06-10', 'JNJ'): 12.40, ('2025-12-29', 'BND'): 52.10, ('2026-04-30', 'JPM'): 18.00}
+ASSET_TYPE = {'Stock': 'Acción', 'ETF': 'ETF', 'Crypto': 'Criptomoneda'}
+LEDGER_HEADER = ['Fecha', 'Activo', 'Símbolo', 'Tipo de Operación', 'Tipo de Activo', 'Cantidad',
+                 'Plataforma', 'Precio en USD (MEP)', 'Precio en moneda de cambio', 'Moneda de cambio',
+                 'Inversión en dólares', 'Ultimo valor de mercado reportado', 'Variación', 'Valor',
+                 'Var2', 'Ratio CEDEARS']
 
 
 def _bench_returns(series):
@@ -120,31 +155,91 @@ def close_on(main, sym, date):
     return s.index[0].strftime('%Y-%m-%d'), float(s.iloc[0])
 
 
+def es_num(v, decimals=2):
+    """Spanish-locale number as the spreadsheet exports it: 1234.5 -> '1.234,50'."""
+    txt = f'{abs(v):,.{decimals}f}'.replace(',', '_').replace('.', ',').replace('_', '.')
+    if decimals > 2:
+        txt = txt.rstrip('0').rstrip(',') if ',' in txt else txt
+    return ('-' if v < 0 else '') + txt
+
+
+def dmy(date):
+    y, m, d = date.split('-')
+    return f'{int(d)}/{int(m)}/{y[2:]}'
+
+
 def build_ledger(main):
-    rows, qty, cost = [], {}, {}
-    for date, t, q, origen, plat in OPS:
+    """Rows of the history file (openings) and of the investments ledger (spreadsheet format)."""
+    from portfolio_data import PRESETS
+    hist = [[OPENING_DATE, t, f'{q:g}', '', '', 'apertura', ''] for t, q in OPENING]
+    rows = []
+    for date, kind, t, q, plat, extra in OPS:
+        if kind == 'blank':
+            rows.append([''] * len(LEDGER_HEADER))
+            continue
+        if kind == 'stable':
+            rows.append([dmy(date), 'Tether', t, 'Compra', 'Stable', es_num(q, 2), plat, 'US$\xa01,00',
+                         '1', 'USD', f'US$\t{es_num(q)}', '', '', '', '', ''])
+            continue
         sym = UNIVERSE[t][0]
         d, px = close_on(main, sym, date)
-        if origen == 'dividendo_efectivo':
-            rows.append([d, t, '', '', f'{CASH_DIVIDENDS[(date, t)]:.2f}', origen, plat])
-            continue
-        if origen == 'dividendo':
-            rows.append([d, t, f'{q:g}', '', '', origen, plat])
-            qty[t] = qty.get(t, 0) + q
-            continue
-        if origen == 'apertura':
-            rows.append([d, t, f'{q:g}', '', '', origen, plat])
-            qty[t] = qty.get(t, 0) + q
-            cost[t] = cost.get(t, 0) + q * px          # opening position valued at that day's close
-            continue
-        monto = abs(q) * px
-        rows.append([d, t, f'{q:g}', f'{px:.4f}' if px < 5 else f'{px:.2f}', f'{monto:.2f}', origen, plat])
-        if q > 0:
-            cost[t] = cost.get(t, 0) + monto
+        name = PRESETS[t]['name']
+        if extra == 'multiline':
+            name = name.replace(' Stock ', '\nStock ')
+        atype = ASSET_TYPE[PRESETS[t]['type']]
+        cur = 'USDT' if plat == 'ExchangeB' else 'USD'
+        pxs = es_num(px, 4 if px < 5 else 2)
+        ratio = '1' if atype != 'Criptomoneda' else ''
+        if kind == 'div_efectivo':
+            rows.append([dmy(d), name, t, 'Dividendos', atype, '', plat, '', '', cur,
+                         f'US$\t({es_num(q)})', '', '', '', '', ratio])
+        elif kind == 'div_unidades':
+            rows.append([dmy(d), name, t, 'Dividendos', atype, es_num(q, 6), plat, '', '', '', '',
+                         '', '', '', '', ratio])
+        elif kind == 'canje':
+            paid_t, paid_q = extra
+            _, ppx = close_on(main, UNIVERSE[paid_t][0], date)
+            monto = paid_q * ppx
+            qty = round(monto / px, 4)
+            pc = paid_q / qty                        # units of the paid asset per unit bought
+            rows.append([dmy(d), name, t, 'Compra', atype, es_num(qty, 6), plat, f'US$\xa0{pxs}',
+                         es_num(pc, 6), paid_t, f'US$\t{es_num(monto)}', '', '', '', '', ratio])
         else:
-            cost[t] = cost.get(t, 0) * (1 + q / qty[t])   # average cost: a sale removes its share of cost
+            monto = q * px
+            qtxt = ('-' if kind == 'venta' else '') + es_num(q, 6)
+            inv = f'US$\t({es_num(monto)})' if kind == 'venta' else f'US$\t{es_num(monto)}'
+            rows.append([dmy(d), name, t, kind.capitalize(), atype, qtxt, plat, f'US$\xa0{pxs}', pxs, cur,
+                         inv, f'US$\t{es_num(q * px * 1.05)}', '5,00%', '', '', ratio])
+    return hist, rows
+
+
+def holdings_and_cost(main):
+    """Final quantity and average-cost basis per ticker, from the files as the Lab parses them
+    (excluded-platform rows included: they are real holdings outside the Lab's scope)."""
+    from lab import ledger
+    res = ledger.load_ledger()
+    assert not res['errors'], res['errors']
+    flows = [dict(o) for o in res['ops'] if o['cantidad'] is not None]
+    for x in res['excluded_ops']:
+        d = next(op[0] for op in OPS if op[2] == x['ticker'] and op[4] == x['plataforma'])
+        _, px = close_on(main, UNIVERSE[x['ticker']][0], d)
+        flows.append({'fecha': d, 'ticker': x['ticker'], 'cantidad': x['cantidad'], 'tipo': 'compra',
+                      'monto_usd': abs(x['cantidad']) * px})
+    flows.sort(key=lambda o: o['fecha'])
+    qty, cost = {}, {}
+    for o in flows:
+        t, q = o['ticker'], o['cantidad']
+        if o['tipo'] == 'apertura':
+            _, px = close_on(main, UNIVERSE[t][0], o['fecha'])
+            cost[t] = cost.get(t, 0) + q * px        # opening position valued at that day's close
+        elif o['tipo'] == 'dividendo_unidades':
+            pass                                     # units at zero cost
+        elif q > 0:
+            cost[t] = cost.get(t, 0) + (o['monto_usd'] or 0)
+        else:
+            cost[t] = cost.get(t, 0) * (1 + q / qty[t])   # a sale removes its share of cost
         qty[t] = qty.get(t, 0) + q
-    return rows, qty, cost
+    return qty, cost
 
 
 def main():
@@ -156,19 +251,24 @@ def main():
     m.to_csv(MAIN, index_label='date')
     s.to_csv(STRESS, index_label='date')
 
-    rows, qty, cost = build_ledger(m)
+    hist, rows = build_ledger(m)
     with open(os.path.join(SAMPLE, 'ledger.csv'), 'w', newline='', encoding='utf-8') as f:
         w = csv.writer(f, delimiter=';', lineterminator='\n')
         w.writerow(['fecha', 'ticker', 'cantidad', 'precio_unitario_usd', 'monto_usd', 'origen', 'plataforma'])
+        w.writerows(hist)
+    with open(os.path.join(SAMPLE, 'investments_ledger.csv'), 'w', newline='', encoding='utf-8-sig') as f:
+        w = csv.writer(f, delimiter=';', lineterminator='\n')
+        w.writerow(LEDGER_HEADER)
         w.writerows(rows)
 
+    qty, cost = holdings_and_cost(m)
     from portfolio_data import PRESETS
     with open(os.path.join(SAMPLE, 'portfolio.csv'), 'w', newline='', encoding='utf-8') as f:
         w = csv.writer(f, lineterminator='\n')
         w.writerow(['ticker', 'name', 'type', 'quantity', 'cost_basis_usd'])
         for t in UNIVERSE:
             p = PRESETS[t]
-            w.writerow([t, p['name'], p['type'], f'{qty[t]:g}', f'{cost[t]:.2f}'])
+            w.writerow([t, p['name'], p['type'], f'{round(qty[t], 6):g}', f'{cost[t]:.2f}'])
 
     # Reference weights of the risk blocks = weights on the last fixture day (descriptive mode).
     from lab import blocks, engine, ledger, prices, stress

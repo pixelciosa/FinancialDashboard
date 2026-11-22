@@ -49,3 +49,13 @@ def test_risk_report_uses_usd_suffix_for_crypto(client, symbol_spy, coin):
 def test_financials_does_not_query_wrong_asset_for_crypto(client, symbol_spy):
     data = client.get('/api/financials/SOL').get_json()
     assert symbol_spy == [] or data.get('supported') is False
+
+
+def test_legacy_refresh_uses_usd_suffix_for_crypto_only(client, fake_yf, server_module, monkeypatch):
+    stock = next(t for t in server_module.ALL_TICKERS if t not in server_module.CRYPTO_YF_SUFFIX)
+    crypto = sorted(server_module.CRYPTO_YF_SUFFIX)[0]
+    monkeypatch.setattr(server_module, 'ALL_TICKERS', [stock, crypto])
+    data = client.get('/api/refresh').get_json()['data']
+    assert stock in fake_yf.calls and f'{crypto}-USD' in fake_yf.calls
+    assert crypto not in fake_yf.calls
+    assert set(data) == {stock, crypto}

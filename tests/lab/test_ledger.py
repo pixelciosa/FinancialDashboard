@@ -1,5 +1,6 @@
-"""Portfolio Lab ledger: clean CSV parser, loader, excluded platforms and reconciliation.
-Synthetic fixtures; the last test reads the fictional demo ledger in sample_data/."""
+"""Portfolio Lab ledger: investments ledger parser (spreadsheet-export format), history file,
+loader, excluded platforms and reconciliation. Synthetic fixtures; the last tests read the
+FICTIONAL demo files shipped in sample_data/ (ledger.csv + investments_ledger.csv)."""
 import json
 import os
 
@@ -11,128 +12,238 @@ from ._helpers import load_lab
 M = load_lab()
 lab_api, L = M['api'], M['ledger']
 
-HEADER = 'fecha;ticker;cantidad;precio_unitario_usd;monto_usd;origen;plataforma'
+# --- Investments ledger (spreadsheet export: ';', d/m/yy, Spanish-locale numbers) -------------
+HEADER = ('Fecha;Activo;Símbolo;Tipo de Operación;Tipo de Activo;Cantidad;Plataforma;'
+          'Precio en USD (MEP);Precio en moneda de cambio;Moneda de cambio;'
+          'Inversión en dólares;Ultimo valor de mercado reportado;Variación;Valor;Var2;Ratio CEDEARS')
+INCLUDED = ('BrokerA', 'ExchangeB')
+EXCLUDED = ('BankC',)
 
 
-def _row(fecha='2026-03-05', ticker='FOO', cant='2.5', precio='100', monto='250', origen='compra',
-         plat='BrokerA'):
-    return f'{fecha};{ticker};{cant};{precio};{monto};{origen};{plat}'
+def _row(fecha='5/3/26', activo='Foo', sim='FOO', op='Compra', tipo='Acción', cant='2,5',
+         plat='BrokerA', precio='US$\xa0100,00', pc='100', mon='USD', inv='US$\t250,00', extra=';;;;'):
+    return f'{fecha};{activo};{sim};{op};{tipo};{cant};{plat};{precio};{pc};{mon};{inv}{extra}'
 
 
-def _parse(*rows, header=HEADER, bom=True, excluded=('BankC',)):
+def _parse(*rows, header=HEADER, titular='Holder A', bom=True, included=INCLUDED, excluded=EXCLUDED):
     text = ('﻿' if bom else '') + header + '\n' + '\n'.join(rows) + '\n'
-    return L.parse_ledger_text(text, excluded)
+    return L.parse_ledger_text(text, titular, excluded, included)
 
 
-# --- Parser ------------------------------------------------------------------------
 def test_bom_separator_and_date():
     r = _parse(_row())
     assert r['errors'] == []
     o = r['ops'][0]
     assert o['fecha'] == '2026-03-05' and o['ticker'] == 'FOO' and o['tipo'] == 'compra'
-    assert o['cantidad'] == 2.5 and o['monto_usd'] == 250.0 and o['plataforma'] == 'BrokerA'
+    assert o['cantidad'] == 2.5 and o['monto_usd'] == 250.0 and o['titular'] == 'Holder A'
+    assert o['plataforma'] == 'BrokerA'
 
 
 def test_number_formats():
-    assert L.parse_number('1234.56') == 1234.56
-    assert L.parse_number('US$ 1,234.56') == 1234.56
-    assert L.parse_number('(1,234.50)') == -1234.5
-    assert L.parse_number('-0.25') == -0.25
-    assert L.parse_number('') is None
+    assert L.parse_number_es('US$\xa01.234,56') == 1234.56
+    assert L.parse_number_es('US$\t(1.234,50)') == -1234.5
+    assert L.parse_number_es('-0,25') == -0.25
+    assert L.parse_number_es('1.500') == 1500
+    assert L.parse_number_es('') is None
     with pytest.raises(ValueError):
-        L.parse_number('abc')
+        L.parse_number_es('abc')
 
 
-def test_platform_column_is_optional():
-    header = 'fecha;ticker;cantidad;precio_unitario_usd;monto_usd;origen'
-    r = _parse('2026-01-02;FOO;1;10;10;compra', header=header)
-    assert r['errors'] == [] and r['ops'][0]['plataforma'] is None
+def test_date_formats():
+    assert L.parse_date_dmy('13/1/26') == '2026-01-13'
+    assert L.parse_date_dmy('3/11/2025') == '2025-11-03'
+    with pytest.raises(ValueError):
+        L.parse_date_dmy('31/2/26')
 
 
-def test_missing_required_column_is_reported():
-    r = _parse('2026-01-02;FOO;1', header='fecha;ticker;cantidad')
-    assert r['ops'] == [] and 'missing columns' in r['errors'][0]['error']
+def test_multiline_quoted_name_uses_real_csv_parser():
+    r = _parse(_row(activo='"Vanguard Total\nStock Market ETF"', sim='VTI'), _row(sim='BAR'))
+    assert r['errors'] == []
+    assert [o['ticker'] for o in r['ops']] == ['VTI', 'BAR']
 
 
-def test_blank_rows_are_counted_not_errors():
-    r = _parse(_row(), ';;;;;;', ';;;;;;')
+def test_header_without_ratio_column_and_blank_rows():
+    header = ';'.join(HEADER.split(';')[:-1])
+    r = _parse(_row(extra=';;;'), ';;;;;;;;;;;;;;', ';;;;;;;;;;;;;;', header=header)
     assert len(r['ops']) == 1 and r['excluded']['vacias'] == 2 and r['errors'] == []
 
 
 def test_symbols_normalized_without_usd_suffix():
-    r = _parse(*[_row(ticker=s) for s in ('SOL-USD', 'ada-usd', 'DOGE')])
+    r = _parse(*[_row(sim=s, tipo='Criptomoneda', plat='ExchangeB') for s in ('SOL-USD', 'ada-usd', 'DOGE')])
     assert [o['ticker'] for o in r['ops']] == ['SOL', 'ADA', 'DOGE']
 
 
-def test_excluded_platform_rows_are_left_out_but_remembered():
-    r = _parse(_row(plat='BrokerA'), _row(plat='ExchangeB'), _row(ticker='NUX', cant='3', plat='bankc'),
-               _row(ticker='NUX', cant='1', origen='venta', plat='BankC'))
-    assert [o['plataforma'] for o in r['ops']] == ['BrokerA', 'ExchangeB']
+def test_platforms_included_canonical_and_excluded_remembered():
+    r = _parse(_row(plat='BrokerA'), _row(plat='exchangeb'), _row(plat='BankC', sim='NUX', cant='3'),
+               _row(plat='bankc', sim='NUX', op='Venta', cant='1'))
+    assert [o['plataforma'] for o in r['ops']] == ['BrokerA', 'ExchangeB']   # spelling from config
     assert r['excluded']['plataforma_excluida'] == 2
-    assert r['excluded_ops'] == [{'ticker': 'NUX', 'cantidad': 3.0, 'plataforma': 'bankc'},
-                                 {'ticker': 'NUX', 'cantidad': -1.0, 'plataforma': 'BankC'}]
+    assert r['excluded_ops'] == [{'ticker': 'NUX', 'cantidad': 3.0, 'plataforma': 'BankC'},
+                                 {'ticker': 'NUX', 'cantidad': -1.0, 'plataforma': 'bankc'}]
+
+
+def test_unknown_platform_is_row_error_only_with_an_included_list():
+    r = _parse(_row(plat='Typo'), _row())
+    assert len(r['ops']) == 1 and 'unknown platform' in r['errors'][0]['error']
+    r = _parse(_row(plat='AnyBroker'), included=())
+    assert r['errors'] == [] and r['ops'][0]['plataforma'] == 'AnyBroker'
+
+
+def test_stable_assets_excluded():
+    r = _parse(_row(sim='USDT', tipo='Stable'), _row())
+    assert len(r['ops']) == 1 and r['excluded']['stable'] == 1
 
 
 def test_sale_has_negative_quantity_and_absolute_amount():
-    r = _parse(_row(origen='venta', cant='1.5', monto='-150'))
+    r = _parse(_row(op='Venta', cant='-1,5', inv='US$\t(150,00)'))
     o = r['ops'][0]
     assert o['tipo'] == 'venta' and o['cantidad'] == -1.5 and o['monto_usd'] == 150.0
 
 
-def test_amount_derived_from_price_when_missing():
-    o = _parse(_row(cant='4', precio='12.5', monto=''))['ops'][0]
-    assert o['monto_usd'] == 50.0
-
-
-def test_opening_position_has_no_price_or_amount():
-    o = _parse(_row(origen='apertura', precio='', monto='', plat=''))['ops'][0]
-    assert o['tipo'] == 'apertura' and o['precio_usd'] is None and o['monto_usd'] is None
-
-
 def test_dividend_in_units_is_zero_cost():
-    o = _parse(_row(origen='dividendo', cant='0.03', precio='', monto=''))['ops'][0]
+    r = _parse(_row(op='Dividendos', cant='0,03', precio='', pc='', mon='', inv=''))
+    o = r['ops'][0]
     assert o['tipo'] == 'dividendo_unidades' and o['cantidad'] == 0.03
     assert o['monto_usd'] == 0.0 and o['precio_usd'] == 0.0
 
 
 def test_cash_dividend_is_income_not_flow():
-    o = _parse(_row(origen='dividendo_efectivo', cant='', precio='', monto='0.37'))['ops'][0]
+    r = _parse(_row(op='Dividendos', cant='', precio='', pc='', mon='USD', inv='US$\t(0,37)'))
+    o = r['ops'][0]
     assert o['tipo'] == 'dividendo_efectivo' and o['monto_usd'] == 0.37
     assert o['cantidad'] is None and o['precio_usd'] is None  # None, never 0
 
 
+def test_swap_generates_sale_leg():
+    r = _parse(_row(sim='SOL-USD', tipo='Criptomoneda', cant='2', plat='ExchangeB',
+                    pc='150', mon='ADA', inv='US$\t400,00'))
+    buy, sell = r['ops']
+    assert buy['tipo'] == 'compra' and buy['ticker'] == 'SOL' and buy['cantidad'] == 2
+    assert sell['tipo'] == 'canje' and sell['ticker'] == 'ADA'
+    assert sell['cantidad'] == pytest.approx(-300) and sell['monto_usd'] == 400.0
+    assert sell['plataforma'] == 'ExchangeB'
+
+
+def test_swap_without_exchange_price_is_row_error():
+    r = _parse(_row(mon='ADA', pc=''))
+    assert r['ops'] == [] and 'swap' in r['errors'][0]['error']
+
+
+def test_only_columns_up_to_investment_are_read():
+    r = _parse(_row(extra=';basura;(zzz);###;nope'))
+    assert r['errors'] == [] and len(r['ops']) == 1
+
+
 def test_row_errors_reported_without_aborting():
-    r = _parse(_row(cant='xx'), _row(fecha='2026-02-31'), _row(origen='regalo'),
-               _row(precio='', monto=''), _row(ticker='OK'))
+    r = _parse(_row(cant='xx'), _row(fecha='31/2/26'), _row(op='Regalo'), _row(inv=''),
+               'short;row', _row(sim='OK'))
     assert len(r['ops']) == 1 and r['ops'][0]['ticker'] == 'OK'
-    assert len(r['errors']) == 4 and all('fila' in e and e['error'] for e in r['errors'])
+    assert len(r['errors']) == 5 and all('fila' in e and e['error'] for e in r['errors'])
     assert set(o['tipo'] for o in r['ops']) <= set(L.TIPOS)
 
 
+def test_titular_from_filename():
+    assert L.titular_from_filename('investments 26-HolderA.csv') == 'HolderA'
+    assert L.titular_from_filename('/x/y/ledger-B.csv') == 'B'
+    assert L.titular_from_filename('investments_ledger.csv') is None
+
+
+# --- History file (opening positions, clean format) ------------------------------------
+HIST_HEADER = 'fecha;ticker;cantidad;precio_unitario_usd;monto_usd;origen;plataforma'
+
+
+def _hrow(fecha='2026-03-05', ticker='FOO', cant='2.5', precio='100', monto='250', origen='compra',
+          plat='BrokerA'):
+    return f'{fecha};{ticker};{cant};{precio};{monto};{origen};{plat}'
+
+
+def _hparse(*rows, header=HIST_HEADER, excluded=EXCLUDED):
+    return L.parse_history_text('﻿' + header + '\n' + '\n'.join(rows) + '\n', excluded)
+
+
+def test_history_mapping():
+    r = _hparse(_hrow(origen='apertura', precio='', monto='', plat=''),
+                _hrow(cant='4', precio='12.5', monto=''),
+                _hrow(origen='venta', cant='1.5', monto='-150'),
+                _hrow(origen='dividendo', cant='0.03', precio='', monto=''),
+                _hrow(origen='dividendo_efectivo', cant='', precio='', monto='0.37'))
+    assert r['errors'] == []
+    a, b, c, d, e = r['ops']
+    assert a['tipo'] == 'apertura' and a['precio_usd'] is None and a['monto_usd'] is None
+    assert a['plataforma'] is None and a['titular'] is None
+    assert b['monto_usd'] == 50.0                            # derived from the price
+    assert c['tipo'] == 'venta' and c['cantidad'] == -1.5 and c['monto_usd'] == 150.0
+    assert d['tipo'] == 'dividendo_unidades' and d['monto_usd'] == 0.0
+    assert e['tipo'] == 'dividendo_efectivo' and e['cantidad'] is None
+    assert set(o['tipo'] for o in r['ops']) <= set(L.TIPOS)
+
+
+def test_history_number_format_and_optional_platform():
+    assert L.parse_number('US$ 1,234.56') == 1234.56 and L.parse_number('(1,234.50)') == -1234.5
+    r = _hparse('2026-01-02;FOO;1;10;10;compra', header='fecha;ticker;cantidad;precio_unitario_usd;monto_usd;origen')
+    assert r['errors'] == [] and r['ops'][0]['plataforma'] is None
+
+
+def test_history_errors_and_missing_columns():
+    r = _hparse(_hrow(cant='xx'), _hrow(fecha='2026-02-31'), _hrow(origen='regalo'), _hrow(ticker='OK'))
+    assert len(r['ops']) == 1 and len(r['errors']) == 3
+    r = _hparse('2026-01-02;FOO;1', header='fecha;ticker;cantidad')
+    assert r['ops'] == [] and 'missing columns' in r['errors'][0]['error']
+
+
 # --- Loading, routes and reconciliation ---------------------------------------------
-def _ledger_file(tmp_path):
-    p = tmp_path / 'ledger.csv'
-    p.write_text('﻿' + HEADER + '\n' + '\n'.join([
-        _row(fecha='2025-01-02', ticker='AAA', cant='4', precio='', monto='', origen='apertura', plat=''),
-        _row(fecha='2025-02-01', ticker='ZZZ', cant='2'),
-        _row(fecha='2025-03-01', ticker='ZZZ', cant='5', plat='BankC'),
-        _row(fecha='2025-04-01', ticker='AAA', cant='', precio='', monto='1.00', origen='dividendo_efectivo'),
-    ]) + '\n', encoding='utf-8')
-    return str(p)
+def _make_files(tmp_path):
+    d = tmp_path / 'books'
+    d.mkdir()
+    (d / 'investments 26-HolderA.csv').write_text(
+        '﻿' + HEADER + '\n' + _row(sim='AAA') + '\n' +
+        _row(op='Dividendos', cant='', precio='', pc='', mon='', inv='US$\t(1,00)') + '\n' +
+        _row(sim='ZZZ', cant='5', plat='BankC') + '\n', encoding='utf-8')
+    (d / 'investments 26-HolderB.csv').write_text(
+        '﻿' + ';'.join(HEADER.split(';')[:-1]) + '\n' + _row(sim='ZZZ', extra=';;;') + '\n',
+        encoding='utf-8')
+    h = tmp_path / 'hist.csv'
+    h.write_text(HIST_HEADER + '\n' + _hrow(fecha='2025-01-02', ticker='AAA', cant='1.5', precio='',
+                                            monto='', origen='apertura', plat='') + '\n', encoding='utf-8')
+    cfg = {'ledger_dir': str(d), 'included_platforms': list(INCLUDED), 'excluded_platforms': list(EXCLUDED),
+           'ledger_files': ['investments 26-HolderA.csv', {'path': 'investments 26-HolderB.csv', 'titular': 'B'}]}
+    return cfg, str(h)
 
 
-def test_load_ledger_counts_and_excluded(tmp_path):
-    r = L.load_ledger({'excluded_platforms': ['BankC']}, ledger_path=_ledger_file(tmp_path))
+def test_load_ledger_history_plus_files_with_holders_and_counts(tmp_path, monkeypatch):
+    monkeypatch.delenv(L.INVESTMENTS_ENV, raising=False)
+    cfg, h = _make_files(tmp_path)
+    r = L.load_ledger(cfg, history_path=h)
     assert r['errors'] == []
     c = r['counts']
-    assert c['total'] == 3 and c['ingresos_efectivo'] == 1 and c['operaciones'] == 2
+    assert c['historial'] == 1 and c['total'] == 4
+    assert c['ingresos_efectivo'] == 1 and c['operaciones'] == 3
     assert c['excluidas']['plataforma_excluida'] == 1
+    assert c['por_archivo'] == {'investments 26-HolderA.csv': 2, 'investments 26-HolderB.csv': 1}
+    tit = {(o['ticker'], o['titular']) for o in r['ops'] if o['origen'] == 'libro'}
+    assert ('AAA', 'HolderA') in tit and ('ZZZ', 'B') in tit
+    assert r['ops'][0]['tipo'] == 'apertura'                  # sorted by date
     assert r['excluded_ops'] == [{'ticker': 'ZZZ', 'cantidad': 5.0, 'plataforma': 'BankC'}]
 
 
-def test_load_ledger_missing_file_reported(tmp_path):
-    r = L.load_ledger({}, ledger_path=str(tmp_path / 'nope.csv'))
-    assert r['ops'] == [] and r['errors'][0]['error'] == 'file not found'
+def test_ledger_files_relative_to_project_and_env_override(tmp_path, monkeypatch):
+    monkeypatch.delenv(L.INVESTMENTS_ENV, raising=False)
+    files = L.ledger_files({'ledger_files': ['sample_data/x.csv']})
+    assert files[0]['path'] == os.path.join(L.ROOT, 'sample_data', 'x.csv')
+    a, b = tmp_path / 'one-A.csv', tmp_path / 'two.csv'
+    monkeypatch.setenv(L.INVESTMENTS_ENV, f'{a}{os.pathsep}{b}')
+    files = L.ledger_files({'ledger_files': ['ignored.csv']})
+    assert [f['path'] for f in files] == [str(a), str(b)] and files[0]['titular'] == 'A'
+
+
+def test_load_ledger_missing_files_reported(tmp_path, monkeypatch):
+    monkeypatch.delenv(L.INVESTMENTS_ENV, raising=False)
+    cfg, h = _make_files(tmp_path)
+    cfg['ledger_files'].append('nope.csv')
+    r = L.load_ledger(cfg, history_path=str(tmp_path / 'no_history.csv'))
+    errs = {e['archivo']: e['error'] for e in r['errors']}
+    assert errs == {'no_history.csv': 'file not found', 'nope.csv': 'file not found'}
+    assert r['counts']['por_archivo']['nope.csv'] is None
 
 
 def test_reconcile_tolerance():
@@ -152,22 +263,23 @@ def test_portfolio_holdings_reader():
 
 
 def test_endpoints_with_synthetic_files(tmp_path, monkeypatch):
-    path = _ledger_file(tmp_path)
+    monkeypatch.delenv(L.INVESTMENTS_ENV, raising=False)
+    cfg, h = _make_files(tmp_path)
     pf = tmp_path / 'pf.csv'
-    pf.write_text('ticker,quantity\nAAA,4\nZZZ,7\n', encoding='utf-8')
-    monkeypatch.setattr(L, 'load_config', lambda path=None: {'excluded_platforms': ['BankC']})
+    pf.write_text('ticker,quantity\nAAA,4\nZZZ,7.5\n', encoding='utf-8')
+    monkeypatch.setattr(L, 'load_config', lambda path=None: cfg)
     monkeypatch.setattr(L, 'PORTFOLIO_CSV', str(pf))
     orig = L.load_ledger
-    monkeypatch.setattr(L, 'load_ledger', lambda config=None, ledger_path=None: orig(config, path))
+    monkeypatch.setattr(L, 'load_ledger', lambda config=None, history_path=None: orig(config, h))
     app = Flask(__name__)
     lab_api.register(app)
     c = app.test_client()
     j = c.get('/api/lab/ledger').get_json()
-    assert j['ok'] and j['counts']['operaciones'] == 2 and j['errors'] == []
+    assert j['ok'] and j['counts']['operaciones'] == 3 and j['errors'] == []
     assert 'NaN' not in json.dumps(j, allow_nan=False)
     rec = c.get('/api/lab/reconcile').get_json()
     est = {r['ticker']: r['estado'] for r in rec['rows']}
-    assert est['AAA'] == 'ok' and est['ZZZ'] == 'esperada_excluida'
+    assert est['AAA'] == 'ok' and est['ZZZ'] == 'esperada_excluida'   # 2.5 in the Lab + 5 on BankC
 
 
 def _rec(lq, pq, xq=None):
@@ -206,12 +318,27 @@ def test_ticker_without_history_is_informative_not_error():
 
 
 # --- Demo files (fictional, shipped in sample_data/) ------------------------------------
-@pytest.mark.skipif(not os.path.exists(L.LEDGER_PATH), reason='demo ledger not available')
-def test_demo_ledger_parses_and_reconciles_with_demo_portfolio():
-    """Expected values come from the FICTIONAL demo ledger generated by scripts/generate_demo_data.py."""
+_DEMO_FILES = L.ledger_files(L.load_config()) if os.path.exists(L.CONFIG_PATH) else []
+_DEMO_OK = os.path.exists(L.LEDGER_PATH) and bool(_DEMO_FILES) and all(os.path.exists(f['path']) for f in _DEMO_FILES)
+
+
+@pytest.mark.skipif(not _DEMO_OK, reason='demo ledger files not available')
+def test_demo_ledger_parses_and_reconciles_with_demo_portfolio(monkeypatch):
+    """Replaces the private edition's count on the author's real files: every expected value
+    comes from the FICTIONAL demo files written by scripts/generate_demo_data.py."""
+    monkeypatch.delenv(L.INVESTMENTS_ENV, raising=False)
+    assert [os.path.relpath(f['path'], L.ROOT) for f in _DEMO_FILES] == [
+        os.path.join('sample_data', 'investments_ledger.csv')]
     r = L.load_ledger()
     assert r['errors'] == []
-    assert r['counts']['operaciones'] == 31 and r['counts']['ingresos_efectivo'] == 3
+    c = r['counts']
+    assert c['historial'] == 6 and c['por_archivo'] == {'investments_ledger.csv': 36}
+    assert c['operaciones'] == 36 and c['ingresos_efectivo'] == 6
+    assert c['excluidas'] == {'plataforma_excluida': 2, 'stable': 2, 'vacias': 1}
+    tipos = {o['tipo'] for o in r['ops']}
+    assert tipos == set(L.TIPOS)                     # the demo exercises every operation type
+    assert {o['titular'] for o in r['ops'] if o['origen'] == 'libro'} == {'Holder A'}
+    assert all(o['fecha'][:4] in ('2025', '2026') for o in r['ops'])
     with open(L.PORTFOLIO_CSV, encoding='utf-8-sig', newline='') as f:
         holdings = L.parse_portfolio_holdings(f.read())
     rows = L.reconcile(L.final_quantities(r['ops']), holdings,

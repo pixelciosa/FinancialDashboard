@@ -1957,7 +1957,7 @@ html, body {
           <span data-i18n="back">Back</span>
         </button>
         <div class="pf-overlay-title" data-i18n="portfolio_title">My Portfolio</div>
-        <a class="pf-overlay-refresh" href="/portfolio" id="pfLabLink" style="text-decoration:none" data-i18n="portfolio_lab_link">Portfolio Lab →</a>
+        <a class="pf-overlay-refresh" href="/portfolio" id="pfLabLink" hidden style="text-decoration:none;display:none" data-i18n="portfolio_lab_link">Portfolio Lab →</a>
         <div class="pf-overlay-sub" id="pfOverlaySub"></div>
         <button class="pf-overlay-refresh" id="pfOverlayRefresh">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
@@ -2277,6 +2277,7 @@ const TRANSLATIONS = {
     risk_tab_overview: 'Overview',
     risk_tab_deep: 'Deep Dive',
     risk_gauge_label: 'Risk',
+    risk_score_na: 'Not available',
     risk_scale_hint: '0 = lowest risk · 100 = highest risk. Computed from published data, without AI.',
     risk_chart_title: 'Price · last 12 months',
     risk_breakdown: 'Risk breakdown',
@@ -2751,6 +2752,7 @@ const TRANSLATIONS = {
     risk_tab_overview: 'Overview',
     risk_tab_deep: 'Deep Dive',
     risk_gauge_label: 'Riesgo',
+    risk_score_na: 'No disponible',
     risk_scale_hint: '0 = menor riesgo · 100 = mayor riesgo. Se calcula con datos publicados, sin IA.',
     risk_chart_title: 'Precio · últimos 12 meses',
     risk_breakdown: 'Desglose del riesgo',
@@ -3844,7 +3846,20 @@ async function loadInitialQuotes() {
   }
 }
 
+// Portfolio Lab: el enlace queda oculto salvo que /api/lab/health responda 200 con ok verdadero
+async function initLabLink() {
+  const link = document.getElementById('pfLabLink');
+  if (!link) return;
+  try {
+    const r = await fetch('/api/lab/health');
+    if (!r.ok) return;
+    const d = await r.json();
+    if (d && d.ok === true) { link.hidden = false; link.style.display = ''; }
+  } catch (e) { /* Lab desactivado o sin red: el enlace sigue oculto */ }
+}
+
 async function init() {
+  initLabLink(); // no bloqueante: una sola llamada al cargar
   // Fetch ticker metadata, dynamic reports, and initial quotes in parallel
   await Promise.all([
     fetch('/api/ticker-metadata').then(r => r.json()).then(d => { state.tickerMeta = d; }).catch(e => console.error('/api/ticker-metadata', e)),
@@ -4589,6 +4604,20 @@ function riskHeader(d, ticker, prefix) {
   </div>`;
 }
 
+// risk_score es null cuando no hay metricas aplicables (nivel 'insufficient'): no se dibuja gauge en 0.
+function riskGaugeValueSvg(score) {
+  if (!Number.isFinite(score)) {
+    return `<text x="150" y="130" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="22" font-weight="700" fill="#8892b0">${finEsc(t('risk_score_na'))}</text>`;
+  }
+  return `<path d="${gaugeArc(score)}" stroke="url(#garc-risk)" stroke-width="22" fill="none" stroke-linecap="round"/>
+        <text x="150" y="138" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="46" font-weight="700" fill="white">${score}</text>
+        <text x="150" y="155" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="#8892b0" letter-spacing="1">/ 100</text>`;
+}
+
+function riskScoreText(d) {
+  return Number.isFinite(d.risk_score) ? `${d.risk_score}/100` : t('risk_score_na');
+}
+
 function riskVerdict(d) {
   const lvl = t('level_' + d.level);
   const val = d.valuation_label ? t('valuation_is').replace('{v}', t('val_' + d.valuation_label)) : '';
@@ -4621,9 +4650,7 @@ function renderRiskOverview(ticker) {
           <stop offset="0%" stop-color="#10d9a0"/><stop offset="45%" stop-color="#f5a524"/><stop offset="100%" stop-color="#cc1a30"/>
         </linearGradient></defs>
         <path d="M 30,145 A 120,120 0 0,1 270,145" stroke="#1e2230" stroke-width="22" fill="none" stroke-linecap="round"/>
-        <path d="${gaugeArc(score)}" stroke="url(#garc-risk)" stroke-width="22" fill="none" stroke-linecap="round"/>
-        <text x="150" y="138" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="46" font-weight="700" fill="white">${score}</text>
-        <text x="150" y="155" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="#8892b0" letter-spacing="1">/ 100</text>
+        ${riskGaugeValueSvg(score)}
       </svg>
       <div class="gverdict" style="color:${color};border:1px solid ${color}">${finEsc(lvl)}</div>
       ${val ? `<div class="risk-val-label">${finEsc(val)}</div>` : ''}
@@ -4655,12 +4682,12 @@ function renderRiskOverview(ticker) {
     ${(d.pillars || []).map(p => `<div class="srow"><span class="sname">${finEsc(t('pillar_' + p.key))}</span>
       <div class="sbar-bg"><div class="sbar-fill" style="width:${p.max ? (p.points / p.max * 100).toFixed(1) : 0}%;background:${RISK_LEVEL_COLOR[riskLevelOfRatio(p.points / (p.max || 1))]}"></div></div>
       <span class="snum">${p.points}/${p.max}</span></div>`).join('')}
-    <div class="stotal"><span class="stlbl">${finEsc(t('risk_total'))}</span><span class="stval" style="color:${color}">${score}/100</span></div>
+    <div class="stotal"><span class="stlbl">${finEsc(t('risk_total'))}</span><span class="stval" style="color:${color}">${finEsc(riskScoreText(d))}</span></div>
   </div>
   <div class="blcard">
     <div class="rating-track-wrap"><div class="risk-bands">${RISK_BANDS.map(([k, w]) =>
       `<div style="width:${w}%;background:${RISK_LEVEL_COLOR[k]}"></div>`).join('')}</div>
-      <div class="rptr" style="left:${score}%;background:${color}"></div></div>
+      ${Number.isFinite(score) ? `<div class="rptr" style="left:${score}%;background:${color}"></div>` : ''}</div>
     <div class="risk-band-lbls">${RISK_BANDS.map(([k, w]) => `<span style="width:${w}%">${finEsc(t('tier_' + k))}</span>`).join('')}</div>
     <div class="fin-note" style="margin:16px 0 0">${finEsc(t('risk_disclaimer'))}</div>
   </div>`;
@@ -4822,7 +4849,7 @@ function copyRiskReport() {
   const na = t('narr_unavailable');
   const lines = [
     `${riskCurrent} · ${d.name}`,
-    `${t('risk_gauge_label')}: ${d.risk_score}/100 · ${lvl}${val ? ' · ' + val : ''}`,
+    `${t('risk_gauge_label')}: ${riskScoreText(d)} · ${lvl}${val ? ' · ' + val : ''}`,
     ...(d.pillars || []).map(p => `  ${t('pillar_' + p.key)}: ${p.points}/${p.max}`),
     '',
     `${t('narrative_title')} (IA · Gemma):`, f.update || na, '',
@@ -5827,6 +5854,7 @@ function renderPortfolioTab() {
       const pos = resp.data || {};
       const ts  = resp.timestamp;
 
+      const cryptoSyms = resp.cryptoSymbols || [];
       const rows = Object.entries(pos)
         .map(([sym, d]) => ({ sym, ...d }))
         .filter(r => {
@@ -5840,7 +5868,7 @@ function renderPortfolioTab() {
       const totalVal = rows.reduce((s,r) => s + (r.currentValue ?? 0), 0);
 
       const enriched = rows.map(r => {
-        const isCrypto = r.type === 'Crypto';
+        const isCrypto = cryptoSyms.includes(r.sym) || r.type === 'Crypto';
         const curVal = r.currentValue ?? 0;
         return {
           ...r,

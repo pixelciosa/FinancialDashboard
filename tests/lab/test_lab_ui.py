@@ -966,3 +966,93 @@ def test_sim_expo_trace_with_colon_ids_and_macro_windows(sim):
     m = sim['macro']
     assert 'Average of 7 days' in m and 'Change over 4 days' in m and 'stroke-dasharray' in m  # el promedio se dibuja
     assert '200' not in m and '63' not in m
+
+
+# ── Integración visual con el dashboard (selector de idioma, selectores, header) ──
+def test_header_lang_picker_matches_dashboard(html):
+    css = _read('lab.css')
+    assert 'class="lab-lang lang-picker"' in html and html.count('class="lang-btn"') == 2
+    for tok in ('data-lang="en"', 'data-lang="es"'):
+        assert tok in html
+    rule = re.search(r'\.lab-lang button \{([^}]*)\}', css).group(1)
+    for decl in ('font-family: var(--mono)', 'font-size: 11px', 'font-weight: 600', 'padding: 3px 8px', 'letter-spacing: .04em'):
+        assert decl in rule, decl
+    assert re.search(r'\.lab-lang button\.active \{[^}]*background: var\(--surface3\)[^}]*color: var\(--text\)', css)
+    assert re.search(r'\.lab-lang \{[^}]*background: var\(--surface2\)[^}]*border-radius: var\(--radius-sm\)[^}]*padding: 2px', css)
+    # el dashboard define los mismos valores (solo lectura): si cambia, hay que revisar el Lab
+    root = open(os.path.join(ROOT, 'index.html'), encoding='utf-8').read()
+    assert 'font-size:11px; font-weight:600; padding:3px 8px' in root
+
+
+def test_bench_and_period_have_visible_labels_help_and_touch_size(html, tr):
+    css = _read('lab.css')
+    for sid in ('labBench', 'labPeriod'):
+        assert f'<label for="{sid}"' in html
+        assert re.search(rf'<select id="{sid}"[^>]*aria-describedby="labHeadHelp"', html)
+        assert f'id="{sid}" aria-label' not in html  # sin etiqueta fija en inglés
+    assert 'id="labHeadHelp"' in html and 'data-i18n="head_help"' in html
+    assert re.search(r'\.lab-head-controls \.lab-field select \{[^}]*height: var\(--control-h\)', css)
+    assert '--control-h: 40px' in _read('tokens.css')
+    for lg in ('en', 'es'):
+        assert tr[lg]['head_help'] and tr[lg]['bench_label'] and tr[lg]['period_label']
+    assert tr['es']['bench_label'] == 'Índice de referencia' and tr['en']['bench_label'] == 'Benchmark index'
+
+
+def test_header_is_scrolling_row_plus_sticky_inline_label_toolbar(html):
+    css = _read('lab.css')
+    # zona 1: fila 1 NO fija (se desplaza con la página): una fila (grid, alto fijo = --header-h) con título y EN/ES + Actualizar
+    top = html[html.index('<header class="lab-topbar"'):html.index('</header>')]
+    for el in ('id="labBack"', 'lab-head-title', 'lab-head-actions', 'data-lang="en"', 'data-lang="es"', 'id="labRefresh"'):
+        assert el in top, el
+    for el in ('id="labBench"', 'id="labPeriod"', 'id="labAsOf"', 'id="labCaches"', 'id="labStatus"'):
+        assert el not in top, el  # selects y estado viven en la barra de herramientas, no en la fija
+    assert re.search(r'\.lab-topbar \{[^}]*display: grid[^}]*height: var\(--header-h\)', css)
+    assert not re.search(r'\.lab-topbar \{[^}]*position: (sticky|fixed)', css)
+    assert not re.search(r'\.lab-topbar \{[^}]*flex-wrap', css)
+    # EN/ES y Actualizar comparten la misma altura de control
+    assert re.search(r'\.lab-lang \{[^}]*height: var\(--control-h\)', css)
+    assert re.search(r'\.lab-head-btn \{[^}]*height: var\(--control-h\)', css)
+    assert '--header-h: 72px' in _read('tokens.css')
+    # zona 2: toolbar = lo único fijo (sticky top:0, fondo opaco, borde, z-index sobre nav y gráficos), label INLINE (fila) junto al select
+    tb = html[html.index('id="labToolbar"'):html.index('id="labHeadHelp"')]
+    for el in ('id="labControls"', 'id="labBench"', 'id="labPeriod"', 'id="labStatus"', 'id="labAsOf"', 'id="labCaches"'):
+        assert el in tb, el
+    assert re.search(r'\.lab-head-toolbar \{[^}]*display: grid[^}]*grid-template-columns: auto', css)
+    rule = re.search(r'\n\.lab-head-toolbar \{[^}]*\}', css).group(0)
+    assert 'position: sticky' in rule and 'top: 0' in rule and 'background: var(--surface)' in rule and 'border-bottom: 1px solid' in rule
+    z = int(re.search(r'z-index: (\d+)', rule).group(1))
+    assert z > 15 and z > 5  # por encima del menú móvil (15) y del tooltip de gráficos (5)
+    # hijo directo de <body> (sin ancestro con overflow) para que sticky abarque todo el scroll
+    assert re.search(r'<body>\s*<header class="lab-topbar".*?</header>\s*<div class="lab-head-toolbar" id="labToolbar">', html, re.S)
+    assert html.index('id="labHeadHelp"') > html.index('id="labToolbar"')
+    assert not re.search(r'\.lab-head-help \{[^}]*position: (sticky|fixed)', css)
+    assert re.search(r'\.lab-head-controls \.lab-field \{[^}]*gap: 10px', css)
+    assert not re.search(r'\.lab-head-controls \.lab-field \{[^}]*flex-direction: column', css[:css.index('@media (max-width: 1100px)')])
+    # bajo 1100 px el estado pasa debajo de los selects, alineado a la izquierda
+    mid = css[css.index('@media (max-width: 1100px)'):css.index('@media (max-width: 860px)')]
+    assert 'grid-template-columns: minmax(0, 1fr)' in mid and 'align-items: flex-start' in mid and 'text-align: left' in mid
+    app = _read('lab_app.js')
+    track = app[app.index('function trackTopbarHeight'):app.index("document.addEventListener('DOMContentLoaded'")]
+    assert "$('labToolbar')" in track and "$('labTopbar')" not in track and '--lab-topbar-h' in track and 'ResizeObserver' in track
+    assert re.search(r'\.lab-nav \{[^}]*top: var\(--lab-topbar-h[^}]*height: calc\(100vh - var\(--lab-topbar-h', css)
+    assert re.search(r'\.lab-section \{ scroll-margin-top: calc\(var\(--lab-topbar-h', css)
+    assert re.search(r'class="lab-btn lab-head-btn" id="labRefresh"', html)
+
+
+def test_header_stacks_on_mobile(html):
+    css = _read('lab.css')
+    mobile = css[css.index('@media (max-width: 860px)'):]
+    assert re.search(r'\.lab-topbar \{[^}]*position: static[^}]*height: auto[^}]*grid-template-columns: minmax\(0, 1fr\)', mobile)
+    # móvil: NADA fijo en la cabecera (la toolbar apilada es alta); solo el menú de anclas queda pegado en top:0
+    assert re.search(r'\.lab-head-toolbar \{[^}]*position: static', mobile)
+    assert re.search(r'\.lab-nav \{[^}]*position: sticky; top: 0', mobile)
+    assert 'justify-content: space-between' in mobile  # EN/ES + Actualizar en una fila
+    assert re.search(r'\.lab-head-controls \{[^}]*flex-direction: column', mobile)
+    assert re.search(r'\.lab-head-controls \.lab-field \{[^}]*flex-direction: column', mobile)  # label arriba en móvil
+    assert re.search(r'\.lab-head-controls \.lab-field select \{[^}]*width: 100%', mobile)
+
+
+def test_lab_app_binds_lang_and_selectors_ids(html):
+    app = _read('lab_app.js')
+    for needle in ("$('labBench').addEventListener('change'", "$('labPeriod').addEventListener('change'", ".lab-lang button", "aria-pressed"):
+        assert needle in app, needle

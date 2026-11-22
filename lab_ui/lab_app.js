@@ -203,7 +203,8 @@ function applyI18n() {
   document.title = t('page_title');
   document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
   document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle); });
-  document.querySelectorAll('.lab-lang button').forEach(b => b.classList.toggle('active', b.dataset.lang === labLang));
+  document.querySelectorAll('.lab-lang button').forEach(b => { const on = b.dataset.lang === labLang; b.classList.toggle('active', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+  const lg = document.querySelector('.lab-lang'); if (lg) lg.setAttribute('aria-label', t('lang_tip'));
   fillPeriod(); fillBench(); paintAsOf(); fillAttrRange();
 }
 function repaintAll() {
@@ -1520,7 +1521,17 @@ function bindEvents() {
   $('labRefreshPanel').addEventListener('click', e => { if (e.target.closest('[data-refresh-dismiss]')) { S.refresh.out = null; paintRefreshPanel(); $('labRefresh').focus(); } });
 }
 
+/* La toolbar sticky (lo único fijo) puede ocupar una o varias filas: el menú lateral y las anclas leen su alto real. */
+function trackTopbarHeight() {
+  const bar = $('labToolbar');
+  if (!bar) return;
+  const set = () => document.documentElement.style.setProperty('--lab-topbar-h', bar.offsetHeight + 'px');
+  set();
+  if (typeof ResizeObserver !== 'undefined') new ResizeObserver(set).observe(bar); else window.addEventListener('resize', set);
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
+  trackTopbarHeight();
   buildCards();
   applyI18n();
   initNav();

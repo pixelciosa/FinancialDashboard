@@ -44,9 +44,11 @@ These rules are enforced by tests (`tests/test_ai_guardrails.py`, `tests/test_na
   financials and risk pipeline, and the reasons come from templates, not from the model.
 - English / Spanish UI.
 
-**Portfolio Lab** (`/portfolio`, enabled with `PORTFOLIO_LAB=1`)
-- Time-weighted performance vs a choice of indices, drawdown, monthly and yearly returns, "same contributions
-  in the index" comparison.
+**Portfolio Lab** (`/portfolio`, enabled by default; `PORTFOLIO_LAB=0` turns it off)
+- Benchmark comparison: a sticky toolbar with a "Benchmark index" selector (S&P 500, Nasdaq 100, sector ETFs,
+  gold, Bitcoin, emerging markets, US dollar index... the 20 symbols of `lab/prices.py` → `INDEX_TICKERS`) and a
+  "Period" selector; time-weighted performance of the portfolio vs that index, drawdown, monthly and yearly
+  returns, and a "same contributions in the index" comparison (what the same deposits would be worth there).
 - Correlation matrix and rolling correlation (Bitcoin, gold, Nasdaq, US dollar index).
 - Exposure by risk block with 5/25 bands, position caps and risk contribution (descriptive, not advice).
 - Attribution by position (modified Dietz) and by operation (FIFO lots).
@@ -56,6 +58,10 @@ These rules are enforced by tests (`tests/test_ai_guardrails.py`, `tests/test_na
 - Decision journal with rule-based evaluation.
 - Ledger reconciliation against current holdings, including an "excluded platforms" concept: operations held on
   a platform you do not want in the Lab are left out but still explain the gap (`esperada_excluida`).
+- Reads the investments ledger straight from a spreadsheet export (Numbers/Excel "CSV with `;`", Spanish-locale
+  numbers), see [Use your own data](#use-your-own-data).
+- EN/ES selector identical to the dashboard's. The "Portfolio Lab" link in the dashboard only appears when
+  `GET /api/lab/health` answers `ok: true` (`initLabLink()` in `index.html`).
 
 ## Architecture
 
@@ -106,8 +112,8 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
 cp .env.example .env              # optional: add NVIDIA_API_KEY for the AI features
-python server.py                  # http://localhost:5050
-PORTFOLIO_LAB=1 python server.py  # also enables the Lab at http://localhost:5050/portfolio
+python server.py                  # http://localhost:5050 (the Lab is at http://localhost:5050/portfolio)
+PORTFOLIO_LAB=0 python server.py  # dashboard only: /portfolio and /api/lab/* answer 404
 ```
 
 Market data is fetched live from yfinance and CoinGecko, so the dashboard needs internet access. In the Lab,
@@ -124,7 +130,8 @@ All inputs are plain CSV files. Point the environment variables (in `.env` or yo
 | `PORTFOLIO_CSV` | `sample_data/portfolio.csv` | `ticker,name,type,quantity,cost_basis_usd` (+ optional `sector,country,coingecko_id`) |
 | `CASH_CSV` | `sample_data/cash.csv` | `currency,amount,usd_rate` (USD per unit of the currency) |
 | `WATCHLIST_CSV` | `sample_data/watchlist.csv` | `ticker,name,type,category` with category `watching` or `archived` |
-| `LEDGER_CSV` | `sample_data/ledger.csv` | Lab ledger, `;`-separated: `fecha;ticker;cantidad;precio_unitario_usd;monto_usd;origen[;plataforma]` |
+| `LEDGER_CSV` | `sample_data/ledger.csv` | Lab history / opening positions, `;`-separated: `fecha;ticker;cantidad;precio_unitario_usd;monto_usd;origen[;plataforma]` |
+| `INVESTMENTS_LEDGER_CSV` | `ledger_files` in `config/lab/config.json` (demo: `sample_data/investments_ledger.csv`) | Lab investments ledger(s), spreadsheet export (see below). Several files: separate them with `:` (`;` on Windows) |
 | `LAB_CONFIG_DIR` | `config/lab` | `config.json`, `blocks.json`, `scenarios.json`, `macro_rules.json` |
 
 Notes:
@@ -133,13 +140,35 @@ Notes:
   common coins, or your `coingecko_id` column), otherwise from yfinance.
 - `cost_basis_usd` is the total cost of the position. A position whose remaining cost is below USD 4 is shown as
   "recovered" (its investment was paid back) and its P&L % is omitted.
-- Ledger `origen` values: `apertura` (opening position), `compra`, `venta`, `dividendo` (units at zero cost),
-  `dividendo_efectivo` (cash income). Rows whose `plataforma` is listed in `config/lab/config.json` →
-  `excluded_platforms` are left out of the Lab and only used by the reconciliation.
+- History file (`LEDGER_CSV`) `origen` values: `apertura` (opening position), `compra`, `venta`, `dividendo`
+  (units at zero cost), `dividendo_efectivo` (cash income).
+- Investments ledger (`config/lab/config.json` → `ledger_files`, paths relative to the project or to
+  `ledger_dir`; an entry can be `{"path": ..., "titular": ...}`): the spreadsheet export as is. One header row,
+  `;` separator, UTF-8 (BOM ok), columns
+  `Fecha;Activo;Símbolo;Tipo de Operación;Tipo de Activo;Cantidad;Plataforma;Precio en USD (MEP);Precio en moneda de cambio;Moneda de cambio;Inversión en dólares`
+  (any later columns, e.g. market value or CEDEAR ratio, are ignored). Dates `d/m/yy`; numbers `1.234,56`,
+  `US$ 100,00`, negatives as `-1,5` or `US$ (150,00)`; quoted names may contain line breaks.
+  `Tipo de Operación`: `Compra`, `Venta`, `Dividendos` (with quantity = units at zero cost; without it = cash
+  income). `Tipo de Activo` `Stable` rows (stablecoins) are skipped. When `Moneda de cambio` is another asset
+  (not USD/USDT/USDC/ARS...), the row is a swap and a sale leg of that asset is added
+  (quantity × `Precio en moneda de cambio`). The holder comes from `titular` or from the file name after the
+  last `-` (`investments 26-HolderA.csv`).
+- Platforms: rows from `excluded_platforms` are left out of the Lab and only used by the reconciliation; when
+  `included_platforms` is not empty, any other platform is reported as a row error (catches typos).
 - Edit `config/lab/blocks.json` so the risk blocks match your tickers. The reference weights are descriptive.
 - Bad rows are skipped and reported (server log, `/api/lab/ledger`), never fatal.
 - The column names of the ledger and the Lab's backend messages are in Spanish (the project started in Spanish);
   the UI is bilingual.
+
+### Data contract
+
+- Missing data is `null`, never `0`: quotes (`chg`, `chg_pct`), the error branch of a position (`currentPrice`,
+  `unrealizedPnl`, `unrealizedPnlPct`, `changePct`, `change`), cash P&L, `financials.annualize_quarterly()` for a
+  missing quarter, and `risk_score` when no metric applies (the UI shows "Not available"). A real 0 is kept.
+- `GET /api/portfolio` exposes `cryptoSymbols` (union of the CoinGecko ids and the `-USD` crypto set): the frontend
+  has no hard-coded crypto list.
+- `GET /api/refresh` (legacy) queries crypto as `<SYM>-USD`; the response keys stay the portfolio tickers.
+- The prompt of `/api/portfolio/analysis` writes `value: n/a` for a position without a value (not added to the total).
 
 ## Testing
 
@@ -153,9 +182,11 @@ python -m pytest -m e2e          # browser tests (requires playwright + Chromium
 - A guard in `tests/conftest.py` makes any non-`live` test fail if it tries to open a network connection, and
   redirects every cache to a temporary folder.
 - Known bugs are recorded as `xfail` with a reason; `xfail_strict` turns a fix into a visible XPASS.
-- The Lab golden tests (`tests/lab/test_engine_golden.py` and the "demo ledger" tests in `test_attribution.py`,
-  `test_exposure.py`, `test_stress.py`) pin the engine against the fictional ledger and the synthetic price
+- The Lab golden tests (`tests/lab/test_engine_golden.py`, `test_benchmark_demo.py` and the "demo ledger" tests
+  in `test_attribution.py`, `test_exposure.py`, `test_stress.py`, `test_ledger.py`) pin the engine against the
+  fictional ledger (`sample_data/ledger.csv` + `sample_data/investments_ledger.csv`) and the synthetic price
   fixtures. Their expected values were regenerated from that fictional data (`scripts/generate_demo_data.py`).
+  Benchmark/index closes in the fixtures are public market data; every index offered by the Lab has one.
 
 | Test file | Protects |
 |---|---|
@@ -177,7 +208,7 @@ python -m pytest -m e2e          # browser tests (requires playwright + Chromium
 | `POST /api/lab/refresh` | Updates the ledger + index prices, the stress cache and the macro cache (requires `application/json`; 409 if one is running) |
 | `GET /api/lab/ledger` | Normalized operations and per-row read errors |
 | `GET /api/lab/reconcile` | Ledger vs `PORTFOLIO_CSV` quantities per ticker; trimmed sales |
-| `GET /api/lab/performance?benchmark=` | Base-100 series, drawdown, monthly/yearly returns, stats, same contributions in the index |
+| `GET /api/lab/performance?benchmark=` | Base-100 series, drawdown, monthly/yearly returns, stats, same contributions in the index (`benchmark` = one of `INDEX_TICKERS`; `BTC` is accepted for `BTC-USD`) |
 | `GET /api/lab/correlation?window=` | Full matrix and rolling correlation (5 to 250 days) |
 | `GET /api/lab/risk-return` | Volatility and return of the portfolio, indices and positions |
 | `GET /api/lab/exposure` | Weight and risk contribution per block, bands, position caps, alerts |
