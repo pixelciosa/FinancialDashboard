@@ -2096,6 +2096,7 @@ const TRANSLATIONS = {
     pf_composition: 'Portfolio Composition',
     pf_by_type: 'By Type',
     pf_by_sector: 'By Sector',
+    sector_cash: 'Cash',
     pf_by_country: 'By Country',
     pf_performance: 'Performance by Position',
     pf_recovered_section: 'Recovered positions — original investment returned',
@@ -2571,6 +2572,7 @@ const TRANSLATIONS = {
     pf_composition: 'Composición del Portfolio',
     pf_by_type: 'Por Tipo',
     pf_by_sector: 'Por Sector',
+    sector_cash: 'Liquidez',
     pf_by_country: 'Por País',
     pf_performance: 'Rendimiento por Posición',
     pf_recovered_section: 'Posiciones recuperadas — inversión original devuelta',
@@ -5695,7 +5697,7 @@ function renderPortfolioCharts(positions) {
   if (cvType) { drawDonutPF(cvType, byType); makeLegend(document.getElementById('pfLegType'), byType, PF_COLORS); }
 
   // By sector
-  const bySector = groupByKey(positions, 'sector', s => s || 'Other');
+  const bySector = groupByKey(positions, 'sector', s => s === 'Cash' ? t('sector_cash') : (s || 'Other'));
   const cvSec = document.getElementById('pfChartSector');
   if (cvSec) { drawDonutPF(cvSec, bySector); makeLegend(document.getElementById('pfLegSector'), bySector, PF_COLORS); }
 

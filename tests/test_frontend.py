@@ -53,6 +53,12 @@ class TestFrontendLogic(unittest.TestCase):
         self.assertIn('state.techTimestamps[ticker] = data.fetched_at', block)
         self.assertIn("renderStatusPill('tech-status', 'technical'", block)
 
+    def test_cash_sector_is_translated(self):
+        """La liquidez llega como código neutral 'Cash' y la UI la traduce (no 'Liquidez' fijo en inglés)."""
+        self.assertIn("s === 'Cash' ? t('sector_cash')", self.content)
+        self.assertIn("sector_cash: 'Cash'", self.content)
+        self.assertIn("sector_cash: 'Liquidez'", self.content)
+
     def test_state_isolation(self):
         self.assertIn('state.loadedCandleTicker', self.content, "loadedCandleTicker state missing")
         self.assertIn('state.lastCandles = []', self.content, "selectTicker must reset lastCandles array")

@@ -483,7 +483,7 @@ def portfolio():
                 'type':             'Cash',
                 'currency':         pos.get('currency'),
                 'country':          pos.get('country') or 'Global',
-                'sector':           'Liquidez',
+                'sector':           'Cash',  # código neutral: la UI lo traduce (sector_cash)
                 'shares':           None,
                 'currentPrice':     None,
                 'currentValue':     round(val, 2),
