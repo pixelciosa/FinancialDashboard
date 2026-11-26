@@ -11,6 +11,14 @@ class TestFrontendLogic(unittest.TestCase):
         with open(html_path, encoding='utf-8') as f:
             self.content = f.read()
 
+    def test_initial_ticker_comes_from_loaded_data(self):
+        """Sin ticker fijo en el HTML ni en el estado: se elige al cargar los metadatos."""
+        self.assertIn('activeTicker: null', self.content)
+        self.assertIn('state.activeTicker = pickInitialTicker()', self.content)
+        self.assertIn("localStorage.setItem('activeTicker', ticker)", self.content,
+                      "selectTicker debe recordar el último ticker elegido")
+        self.assertNotIn('<div class="tick" id="tech-tick">JPM</div>', self.content)
+
     def test_state_isolation(self):
         self.assertIn('state.loadedCandleTicker', self.content, "loadedCandleTicker state missing")
         self.assertIn('state.lastCandles = []', self.content, "selectTicker must reset lastCandles array")

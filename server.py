@@ -581,6 +581,7 @@ Output JSON schema must match EXACTLY:
         return jsonify({
             'ok': True,
             'analysis': analysis_json,
+            'model': NVIDIA_MODEL,
             'timestamp': datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
         })
 
