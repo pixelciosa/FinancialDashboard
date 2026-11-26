@@ -8,7 +8,27 @@ cash), with a deterministic risk model, quarterly fundamentals, a grounded AI na
 portfolio of well-known tickers in `sample_data/`, and synthetic prices for those tickers in the Lab test
 fixtures. You can point the app to your own CSV files (see [Use your own data](#use-your-own-data)).
 
-> Screenshots: _coming soon_.
+## Demo
+
+<!-- Demo video: edit this README on github.com, drag Financial-Dashboard-Demo.mp4 here and keep the generated link on its own line. -->
+
+**Portfolio overview.** Total value, unrealized P&L and composition by type, sector and country.
+
+![Portfolio overview: total value, P&L and composition charts](docs/screenshots/01-portfolio-overview.png)
+
+**Risk report with a grounded AI narrative.** The score and its pillars come from deterministic code; the model
+only explains them, and every figure in its text is checked against the computed facts.
+
+![Risk report deep dive with the AI narrative, catalysts, risks and bottom line](docs/screenshots/02-risk-deep-dive.png)
+
+**Chat agent with guardrails.** Asked whether to sell a position, the agent declines to give an order and answers
+with the dashboard's own data and rules.
+
+![Chat agent declining a sell recommendation and showing the position's data](docs/screenshots/03-chat-guardrails.png)
+
+**Portfolio Lab.** Performance against a selectable benchmark index and period; here, drawdown versus the S&P 500.
+
+![Portfolio Lab: portfolio drawdown compared with the S&P 500](docs/screenshots/04-lab-benchmark.png)
 
 ## Design principle: AI is never the source of a number
 
