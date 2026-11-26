@@ -3590,6 +3590,12 @@ async function loadChart(ticker, interval) {
     const candles = data.candles || [];
     state.lastCandles = candles;
     state.loadedCandleTicker = ticker;
+    // La píldora de estado refleja cuándo se bajaron las velas (también con el botón Refresh del header)
+    if (!state.techTimestamps) state.techTimestamps = {};
+    state.techTimestamps[ticker] = data.fetched_at || new Date().toISOString();
+    if (typeof renderStatusPill === 'function' && !(state.singleRefreshes && state.singleRefreshes[ticker])) {
+      renderStatusPill('tech-status', 'technical', state.techTimestamps[ticker]);
+    }
 
     const candleData = candles.map(c => ({
       time: c.time,

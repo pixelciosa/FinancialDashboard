@@ -671,7 +671,8 @@ def ohlcv(ticker, interval):
         hist = t.history(period=period, interval=yf_interval)
 
         if hist.empty:
-            result = {'candles': [], 'ticker': ticker, 'interval': interval}
+            result = {'candles': [], 'ticker': ticker, 'interval': interval,
+                      'fetched_at': datetime.now(timezone.utc).isoformat()}
             put_cached_ohlcv(ticker, interval, result)
             return jsonify(result)
 
@@ -713,6 +714,8 @@ def ohlcv(ticker, interval):
             'interval': interval,
             'period':   period,
             'candles':  candles,
+            # Cuándo se bajaron estas velas de la fuente (se mantiene al servirlas desde la caché)
+            'fetched_at': datetime.now(timezone.utc).isoformat(),
         }
         put_cached_ohlcv(ticker, interval, response_data)
         return jsonify(response_data)

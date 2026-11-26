@@ -129,6 +129,16 @@ def test_risk_tab_endpoints_still_work(client, fake_yf):
 
 # ── OHLCV / análisis técnico ─────────────────────────────────────────────────
 
+def test_ohlcv_reports_when_candles_were_fetched(client, fake_yf):
+    """fetched_at alimenta la píldora de estado de Technical Analysis; la caché conserva la hora original."""
+    from datetime import datetime
+    fake_yf['ACME'] = FakeTicker('ACME', history=monthly_history(periods=30))
+    first = client.get('/api/ohlcv/ACME/1d').get_json()
+    assert datetime.fromisoformat(first['fetched_at']).tzinfo is not None
+    again = client.get('/api/ohlcv/ACME/1d').get_json()
+    assert again['fetched_at'] == first['fetched_at']
+
+
 def test_ohlcv_daily_shape_and_ema(client, fake_yf):
     fake_yf['ACME'] = FakeTicker('ACME', history=monthly_history(periods=30))
     data = client.get('/api/ohlcv/ACME/1d').get_json()

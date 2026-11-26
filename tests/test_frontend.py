@@ -46,6 +46,13 @@ class TestFrontendLogic(unittest.TestCase):
         self.assertIn('renderCountryFilter();', self.content)
         self.assertNotIn('btn.childNodes[0].textContent', self.content)
 
+    def test_technical_pill_uses_candle_fetch_time(self):
+        """La píldora técnica se actualiza al cargar velas, no solo con el botón de refresco individual."""
+        start = self.content.index('async function loadChart(')
+        block = self.content[start:start + 2500]
+        self.assertIn('state.techTimestamps[ticker] = data.fetched_at', block)
+        self.assertIn("renderStatusPill('tech-status', 'technical'", block)
+
     def test_state_isolation(self):
         self.assertIn('state.loadedCandleTicker', self.content, "loadedCandleTicker state missing")
         self.assertIn('state.lastCandles = []', self.content, "selectTicker must reset lastCandles array")
