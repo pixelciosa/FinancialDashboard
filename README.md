@@ -10,8 +10,9 @@ fixtures. You can point the app to your own CSV files (see [Use your own data](#
 
 ## Demo
 
-[<!-- Demo video: edit this README on github.com, drag Financial-Dashboard-Demo.mp4 here and keep the generated link on its own line. -->
-](https://github.com/user-attachments/assets/f38216eb-d61c-4c92-b231-1845343e09a5)
+<!-- Demo video -->
+
+https://github.com/user-attachments/assets/f38216eb-d61c-4c92-b231-1845343e09a5
 
 **Portfolio overview.** Total value, unrealized P&L and composition by type, sector and country.
 
