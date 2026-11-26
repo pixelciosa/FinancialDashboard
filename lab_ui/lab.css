@@ -17,6 +17,7 @@ button, select, input { font: inherit; color: inherit; }
   border-radius: var(--radius-pill); color: var(--text); font-size: 12px; font-weight: 500; white-space: nowrap;
   transition: border-color .15s, color .15s, background .15s; }
 .lab-back:hover { border-color: var(--accent); color: var(--accent); background: rgba(77,159,255,.06); }
+.lab-back.lab-toolbar-back[hidden] { display: none; }  /* .lab-back fija display: sin esto, hidden no oculta */
 .lab-head-actions { display: flex; align-items: center; gap: 12px; }
 .lab-head-toolbar { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 32px; row-gap: 10px;
   position: sticky; top: 0; z-index: 20; padding: 8px 24px; background: var(--surface); border-bottom: 1px solid var(--border); }

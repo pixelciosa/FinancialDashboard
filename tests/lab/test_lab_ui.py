@@ -4,6 +4,7 @@ El contrato de tokens vive en test_scaffold.py; aquí no se duplica.
 """
 import json
 import os
+import pathlib
 import re
 import shutil
 import subprocess
@@ -1056,3 +1057,16 @@ def test_lab_app_binds_lang_and_selectors_ids(html):
     app = _read('lab_app.js')
     for needle in ("$('labBench').addEventListener('change'", "$('labPeriod').addEventListener('change'", ".lab-lang button", "aria-pressed"):
         assert needle in app, needle
+
+
+def test_sticky_toolbar_has_back_button_shown_only_when_stuck():
+    """La toolbar fija trae su propio "← Dashboard", oculto hasta que la barra principal sale de pantalla."""
+    root = pathlib.Path(__file__).resolve().parents[2] / 'lab_ui'
+    html = (root / 'index.html').read_text(encoding='utf-8')
+    toolbar = html[html.index('id="labToolbar"'):html.index('id="labStatus"')]
+    assert 'id="labToolbarBack"' in toolbar and 'href="/"' in toolbar and ' hidden>' in toolbar
+    js = (root / 'lab_app.js').read_text(encoding='utf-8')
+    assert 'function trackToolbarBack()' in js and 'trackToolbarBack();' in js
+    assert 'back.hidden = entry.isIntersecting || !sticky' in js
+    css = (root / 'lab.css').read_text(encoding='utf-8')
+    assert '.lab-back.lab-toolbar-back[hidden] { display: none; }' in css

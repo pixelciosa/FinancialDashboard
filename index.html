@@ -1894,8 +1894,8 @@ html, body {
             <span class="status-pill" id="tech-status"></span>
           </div>
           <div class="sh-right">
-            <div class="price" id="tech-price">$0.00</div>
-            <div class="chg" id="tech-chg">+0.00 (+0.00%)</div>
+            <div class="price" id="tech-price">—</div>
+            <div class="chg" id="tech-chg"></div>
           </div>
         </div>
 
@@ -3926,6 +3926,7 @@ function pickInitialTicker() {
 }
 
 async function init() {
+  applyTranslations(); // antes de esperar datos: sin esto, la carga muestra los textos por defecto del HTML (en español)
   initLabLink(); // no bloqueante: una sola llamada al cargar
   // Fetch ticker metadata, dynamic reports, and initial quotes in parallel
   await Promise.all([

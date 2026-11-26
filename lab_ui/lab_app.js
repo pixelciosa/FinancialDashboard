@@ -1530,8 +1530,20 @@ function trackTopbarHeight() {
   if (typeof ResizeObserver !== 'undefined') new ResizeObserver(set).observe(bar); else window.addEventListener('resize', set);
 }
 
+/* Botón "← Dashboard" en la toolbar fija: visible solo cuando la barra principal (que tiene el original)
+   ya no se ve y la toolbar está pegada arriba. En móvil la toolbar no es fija y el botón no aparece. */
+function trackToolbarBack() {
+  const top = $('labTopbar'), bar = $('labToolbar'), back = $('labToolbarBack');
+  if (!top || !bar || !back || typeof IntersectionObserver === 'undefined') return;
+  new IntersectionObserver(([entry]) => {
+    const sticky = getComputedStyle(bar).position === 'sticky';
+    back.hidden = entry.isIntersecting || !sticky;
+  }).observe(top);
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   trackTopbarHeight();
+  trackToolbarBack();
   buildCards();
   applyI18n();
   initNav();
