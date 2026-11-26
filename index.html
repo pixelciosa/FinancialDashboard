@@ -1738,11 +1738,7 @@ html, body {
             </button>
             <div class="filter-dropdown" id="paisDropdown">
               <div class="filter-option selected" data-filter="pais" data-value="all" data-i18n="all">All</div>
-              <div class="filter-option" data-filter="pais" data-value="USA">USA</div>
-              <div class="filter-option" data-filter="pais" data-value="Argentina">Argentina</div>
-              <div class="filter-option" data-filter="pais" data-value="China">China</div>
-              <div class="filter-option" data-filter="pais" data-value="Taiwan">Taiwan</div>
-              <div class="filter-option" data-filter="pais" data-value="Peru">Per&#250;</div>
+              <!-- Los países se generan desde los datos cargados (renderCountryFilter) -->
             </div>
           </div>
           <!-- Sort filter -->
@@ -2980,7 +2976,7 @@ const TRANSLATIONS = {
   },
 };
 
-let currentLang = localStorage.getItem('lang') || 'en';
+let currentLang = localStorage.getItem('fdDemo.lang') || 'en';
 
 function t(key) {
   return (TRANSLATIONS[currentLang] || TRANSLATIONS.en)[key] || key;
@@ -3005,7 +3001,7 @@ function applyTranslations() {
 
 function setLanguage(lang) {
   currentLang = lang;
-  localStorage.setItem('lang', lang);
+  localStorage.setItem('fdDemo.lang', lang);
   applyTranslations();
   if (typeof state === 'undefined') return;
   if (typeof updateHeader === 'function') updateHeader(state.activeTicker);
@@ -3038,9 +3034,9 @@ const state = {
   liveQuotes: {},
   filters: { tipo: 'all', pais: 'all' },
   search: '',
-  extraTickers: JSON.parse(localStorage.getItem('extraTickers') || '[]'),
-  categoryOverrides: JSON.parse(localStorage.getItem('categoryOverrides') || '{}'),
-  hiddenTickers: new Set(JSON.parse(localStorage.getItem('hiddenTickers') || '[]')),
+  extraTickers: JSON.parse(localStorage.getItem('fdDemo.extraTickers') || '[]'),
+  categoryOverrides: JSON.parse(localStorage.getItem('fdDemo.categoryOverrides') || '{}'),
+  hiddenTickers: new Set(JSON.parse(localStorage.getItem('fdDemo.hiddenTickers') || '[]')),
   chartInstance: null,
   candleSeries: null,
   volumeSeries: null,
@@ -3163,22 +3159,22 @@ function getAllMeta() {
 
 function setTickerCategory(symbol, newCategory) {
   state.categoryOverrides[symbol] = newCategory;
-  localStorage.setItem('categoryOverrides', JSON.stringify(state.categoryOverrides));
+  localStorage.setItem('fdDemo.categoryOverrides', JSON.stringify(state.categoryOverrides));
   const extra = state.extraTickers.find(t => t.symbol === symbol);
   if (extra) {
     extra.category = newCategory;
-    localStorage.setItem('extraTickers', JSON.stringify(state.extraTickers));
+    localStorage.setItem('fdDemo.extraTickers', JSON.stringify(state.extraTickers));
   }
   renderSidebar();
 }
 
 function deleteTicker(symbol) {
   state.hiddenTickers.add(symbol);
-  localStorage.setItem('hiddenTickers', JSON.stringify([...state.hiddenTickers]));
+  localStorage.setItem('fdDemo.hiddenTickers', JSON.stringify([...state.hiddenTickers]));
   state.extraTickers = state.extraTickers.filter(t => t.symbol !== symbol);
-  localStorage.setItem('extraTickers', JSON.stringify(state.extraTickers));
+  localStorage.setItem('fdDemo.extraTickers', JSON.stringify(state.extraTickers));
   delete state.categoryOverrides[symbol];
-  localStorage.setItem('categoryOverrides', JSON.stringify(state.categoryOverrides));
+  localStorage.setItem('fdDemo.categoryOverrides', JSON.stringify(state.categoryOverrides));
   if (state.activeTicker === symbol) {
     const first = Object.keys(getAllMeta())[0];
     if (first) selectTicker(first);
@@ -3191,10 +3187,7 @@ function passesFilters(meta, symbol) {
   if (q && !symbol.toLowerCase().includes(q) && !(meta.name || '').toLowerCase().includes(q)) return false;
   if (state.filters.tipo !== 'all' && meta.type !== state.filters.tipo) return false;
   if (state.filters.pais !== 'all') {
-    const country = meta.country || '';
-    const filterVal = state.filters.pais;
-    if (filterVal === 'Peru' && country !== 'Peru') return false;
-    if (filterVal !== 'Peru' && country !== filterVal) return false;
+    if ((meta.country || '') !== state.filters.pais) return false;
   }
   return true;
 }
@@ -3242,7 +3235,47 @@ function sortSymbols(symbolList) {
   return list;
 }
 
+/* Texto del botón de un filtro. Va en su <span>, no en un nodo de texto suelto (eso producía
+   "Country Country"). Sin valor elegido muestra la etiqueta traducible; con valor, el valor. */
+function setFilterButtonLabel(btn, label, i18nKey) {
+  const span = btn.querySelector('span:not(.chevron)');
+  if (!span) return;
+  if (label) {
+    span.removeAttribute('data-i18n');
+    span.textContent = label;
+  } else {
+    span.setAttribute('data-i18n', i18nKey);
+    span.textContent = t(i18nKey);
+  }
+}
+
+/* Opciones del filtro de país a partir de los tickers cargados (cartera, seguimiento y extras).
+   Si el país elegido ya no existe en los datos, vuelve a "Todos". */
+function renderCountryFilter() {
+  const dropdown = document.getElementById('paisDropdown');
+  const btn = document.getElementById('paisBtn');
+  if (!dropdown || !btn) return;
+  const countries = [...new Set(Object.values(getAllMeta()).map(m => m.country).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
+  if (state.filters.pais !== 'all' && !countries.includes(state.filters.pais)) {
+    state.filters.pais = 'all';
+    setFilterButtonLabel(btn, null, 'filter_country');
+  }
+  dropdown.querySelectorAll('.filter-option:not([data-value="all"])').forEach(o => o.remove());
+  countries.forEach(c => {
+    const opt = document.createElement('div');
+    opt.className = 'filter-option' + (state.filters.pais === c ? ' selected' : '');
+    opt.dataset.filter = 'pais';
+    opt.dataset.value = c;
+    opt.textContent = c;
+    dropdown.appendChild(opt);
+  });
+  const all = dropdown.querySelector('.filter-option[data-value="all"]');
+  if (all) all.classList.toggle('selected', state.filters.pais === 'all');
+}
+
 function renderSidebar() {
+  renderCountryFilter();
   const allMeta = getAllMeta();
   const sections = { portfolio: [], watching: [], archived: [] };
 
@@ -3337,7 +3370,7 @@ function updateHeader(ticker) {
   const name = meta.name || ticker;
   const sector = meta.sector || '';
   const type = meta.type || '';
-  const ts = state.lastUpdated || formatNow();
+  const ts = formatNow(state.lastUpdated);
 
   document.getElementById('headerTitle').textContent = `${t('dashboard_title')} · ${ticker}`;
 
@@ -3398,10 +3431,13 @@ function renderTechHeader(ticker) {
   }
 }
 
-function formatNow() {
-  const d = new Date();
-  return d.toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' })
-    + ', ' + d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+/* Fecha y hora en el idioma activo. Recibe un Date (o nada = ahora); se formatea al mostrar,
+   así cambiar de idioma también cambia el formato. */
+function formatNow(date) {
+  const d = date instanceof Date ? date : new Date();
+  const loc = currentLang === 'es' ? 'es-AR' : 'en-US';
+  return d.toLocaleDateString(loc, { day: '2-digit', month: 'short', year: 'numeric' })
+    + ', ' + d.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' });
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -3599,7 +3635,7 @@ async function loadChart(ticker, interval) {
     }
     renderMetrics(candles);
     if (typeof updateBollingerBands === 'function') updateBollingerBands(candles);
-    state.lastUpdated = formatNow();
+    state.lastUpdated = new Date();
     updateHeader(ticker);
     if (typeof renderTechHeader === 'function') renderTechHeader(ticker);
 
@@ -3751,7 +3787,7 @@ function renderMetrics(candles) {
 
 function selectTicker(ticker) {
   state.activeTicker = ticker;
-  try { localStorage.setItem('activeTicker', ticker); } catch (e) { /* almacenamiento no disponible */ }
+  try { localStorage.setItem('fdDemo.activeTicker', ticker); } catch (e) { /* almacenamiento no disponible */ }
   state.lastCandles = [];
   state.loadedCandleTicker = null;
   if (typeof clearTechnicalChart === 'function') clearTechnicalChart();
@@ -3877,7 +3913,7 @@ function pickInitialTicker() {
   const qTicker = (new URLSearchParams(location.search).get('ticker') || '').toUpperCase();
   if (known(qTicker)) return qTicker;
   let saved = null;
-  try { saved = localStorage.getItem('activeTicker'); } catch (e) { saved = null; }
+  try { saved = localStorage.getItem('fdDemo.activeTicker'); } catch (e) { saved = null; }
   if (known(saved)) return saved;
   const syms = Object.keys(meta);
   return syms.find(s => meta[s].category === 'portfolio') || syms[0] || null;
@@ -3949,28 +3985,25 @@ async function init() {
       }
     });
 
-    dropdown.querySelectorAll('.filter-option').forEach(opt => {
-      opt.addEventListener('click', () => {
-        const key = opt.dataset.filter;
-        const val = opt.dataset.value;
-        if (key === 'sort') {
-          state.sortBy = val;
-        } else {
-          state.filters[key === 'tipo' ? 'tipo' : 'pais'] = val;
-        }
-        dropdown.querySelectorAll('.filter-option').forEach(o => o.classList.remove('selected'));
-        opt.classList.add('selected');
-        btn.classList.remove('open');
-        dropdown.classList.remove('open');
-        let label;
-        if (key === 'sort') {
-          label = val === 'default' ? t('filter_sort') : opt.textContent;
-        } else {
-          label = val === 'all' ? (key === 'tipo' ? t('filter_type') : t('filter_country')) : val;
-        }
-        btn.childNodes[0].textContent = label + ' ';
-        renderSidebar();
-      });
+    // Delegado: también sirve para las opciones de país, que se generan desde los datos
+    dropdown.addEventListener('click', e => {
+      const opt = e.target.closest('.filter-option');
+      if (!opt || !dropdown.contains(opt)) return;
+      const key = opt.dataset.filter;
+      const val = opt.dataset.value;
+      if (key === 'sort') {
+        state.sortBy = val;
+      } else {
+        state.filters[key === 'tipo' ? 'tipo' : 'pais'] = val;
+      }
+      dropdown.querySelectorAll('.filter-option').forEach(o => o.classList.remove('selected'));
+      opt.classList.add('selected');
+      btn.classList.remove('open');
+      dropdown.classList.remove('open');
+      const defaultKey = { tipo: 'filter_type', pais: 'filter_country', sort: 'filter_sort' }[key];
+      const isDefault = val === 'all' || val === 'default';
+      setFilterButtonLabel(btn, isDefault ? null : opt.textContent.trim(), defaultKey);
+      renderSidebar();
     });
   });
 
@@ -4303,7 +4336,7 @@ async function init() {
             type: (report && report.type) ? report.type : 'Stock',
             country: 'USA', sector: '',
           });
-          localStorage.setItem('extraTickers', JSON.stringify(state.extraTickers));
+          localStorage.setItem('fdDemo.extraTickers', JSON.stringify(state.extraTickers));
         }
         lastAdded = sym;
       } catch (err) {
@@ -4373,7 +4406,6 @@ function renderStatusPill(elOrId, tabType, generatedAt, options = {}) {
   if (!target) return;
 
   const targetId = target.id;
-  const lang = (state && state.lang) ? state.lang : 'es';
   const translate = typeof t === 'function' ? t : (k) => k;
 
   const btnConfig = {
@@ -4410,7 +4442,7 @@ function renderStatusPill(elOrId, tabType, generatedAt, options = {}) {
     color = '#60a5fa';
     border = '1px solid rgba(59, 130, 246, 0.25)';
   } else if (!generatedAt) {
-    const label = lang === 'en' ? 'Outdated' : 'Vencido';
+    const label = translate('status_outdated');
     statusText = label;
     bg = 'rgba(156, 163, 175, 0.08)';
     color = '#9ca3af';
@@ -4418,7 +4450,7 @@ function renderStatusPill(elOrId, tabType, generatedAt, options = {}) {
   } else {
     const genDate = new Date(generatedAt);
     if (isNaN(genDate.getTime())) {
-      const label = lang === 'en' ? 'Outdated' : 'Vencido';
+      const label = translate('status_outdated');
       statusText = label;
       bg = 'rgba(156, 163, 175, 0.08)';
       color = '#9ca3af';
@@ -4444,7 +4476,7 @@ function renderStatusPill(elOrId, tabType, generatedAt, options = {}) {
         color = '#4ade80';
         border = '1px solid rgba(34, 197, 94, 0.25)';
       } else if (diffMs > cutoffTTL) {
-        const label = lang === 'en' ? 'Outdated' : 'Vencido';
+        const label = translate('status_outdated');
         statusText = label;
         bg = 'rgba(156, 163, 175, 0.08)';
         color = '#9ca3af';
@@ -4918,10 +4950,10 @@ function finEsc(s) {
 }
 
 function finView() {
-  try { return localStorage.getItem('finView') === 'quarterly' ? 'quarterly' : 'annual'; } catch (e) { return 'annual'; }
+  try { return localStorage.getItem('fdDemo.finView') === 'quarterly' ? 'quarterly' : 'annual'; } catch (e) { return 'annual'; }
 }
 function setFinView(v) {
-  try { localStorage.setItem('finView', v); } catch (e) { /* vista solo en memoria */ }
+  try { localStorage.setItem('fdDemo.finView', v); } catch (e) { /* vista solo en memoria */ }
   if (finCurrentTicker) renderFinancialDash(finCurrentTicker);
 }
 
@@ -5996,7 +6028,7 @@ function toggleChat(force) {
 function toggleChatExpand() {
   chatState.expanded = !chatState.expanded;
   el('chatPanel').classList.toggle('expanded', chatState.expanded);
-  try { localStorage.setItem('chatExpanded', chatState.expanded ? '1' : '0'); } catch (e) { /* preferencia solo en memoria */ }
+  try { localStorage.setItem('fdDemo.chatExpanded', chatState.expanded ? '1' : '0'); } catch (e) { /* preferencia solo en memoria */ }
 }
 
 function chatTickers() {
@@ -6211,7 +6243,7 @@ async function sendChatMessage(override) {
 
 function initChat() {
   chatState.history = chatLoad();
-  try { chatState.expanded = localStorage.getItem('chatExpanded') === '1'; } catch (e) { chatState.expanded = false; }
+  try { chatState.expanded = localStorage.getItem('fdDemo.chatExpanded') === '1'; } catch (e) { chatState.expanded = false; }
   el('chatPanel').classList.toggle('expanded', chatState.expanded);
   el('chatFab').addEventListener('click', () => toggleChat(true));
   el('chatClose').addEventListener('click', () => toggleChat(false));
@@ -6270,7 +6302,7 @@ function addToWatching(sym, name) {
     setTickerCategory(sym, 'watching');
   } else {
     state.extraTickers.push({ symbol: sym, category: 'watching', name: name || sym, type: 'Stock', country: 'USA', sector: '' });
-    try { localStorage.setItem('extraTickers', JSON.stringify(state.extraTickers)); } catch (e) { /* solo en memoria */ }
+    try { localStorage.setItem('fdDemo.extraTickers', JSON.stringify(state.extraTickers)); } catch (e) { /* solo en memoria */ }
     renderSidebar();
   }
   showToast(t('exp_added').replace('{sym}', sym));

@@ -15,9 +15,36 @@ class TestFrontendLogic(unittest.TestCase):
         """Sin ticker fijo en el HTML ni en el estado: se elige al cargar los metadatos."""
         self.assertIn('activeTicker: null', self.content)
         self.assertIn('state.activeTicker = pickInitialTicker()', self.content)
-        self.assertIn("localStorage.setItem('activeTicker', ticker)", self.content,
+        self.assertIn("localStorage.setItem('fdDemo.activeTicker', ticker)", self.content,
                       "selectTicker debe recordar el último ticker elegido")
         self.assertNotIn('<div class="tick" id="tech-tick">JPM</div>', self.content)
+
+    def test_status_pill_and_dates_follow_active_language(self):
+        """La píldora "Outdated/Vencido" y la fecha del encabezado usan el idioma activo, no español fijo."""
+        start = self.content.index('function renderStatusPill(')
+        pill = self.content[start:start + 6000]
+        self.assertNotIn("'Vencido'", pill)
+        self.assertIn("translate('status_outdated')", pill)
+        self.assertNotIn('state.lang', self.content)
+        start = self.content.index('function formatNow(')
+        self.assertIn("currentLang === 'es' ? 'es-AR' : 'en-US'", self.content[start:start + 500])
+
+    def test_local_storage_keys_are_namespaced(self):
+        """Claves propias de la demo: no leer datos guardados por otra app en el mismo localhost:puerto."""
+        import re
+        keys = re.findall(r"localStorage\.(?:getItem|setItem|removeItem)\('([^']+)'", self.content)
+        self.assertTrue(keys)
+        self.assertTrue(all(k.startswith('fdDemo.') for k in keys), keys)
+
+    def test_country_filter_is_built_from_data(self):
+        """El filtro de país sale de los tickers cargados (sin países fijos) y el botón no repite la etiqueta."""
+        start = self.content.index('id="paisDropdown"')
+        static = self.content[start:start + 400]
+        for country in ('USA', 'Argentina', 'China', 'Taiwan', 'Peru'):
+            self.assertNotIn(f'data-value="{country}"', static)
+        self.assertIn('function renderCountryFilter()', self.content)
+        self.assertIn('renderCountryFilter();', self.content)
+        self.assertNotIn('btn.childNodes[0].textContent', self.content)
 
     def test_state_isolation(self):
         self.assertIn('state.loadedCandleTicker', self.content, "loadedCandleTicker state missing")

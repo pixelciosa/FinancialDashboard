@@ -25,7 +25,7 @@ def test_deeplink_only_accepts_known_tickers():
     # solo un ticker presente en los metadatos cargados (y no oculto por el usuario)
     assert "if (known(qTicker)) return qTicker;" in block
     # el deep link tiene prioridad sobre el último ticker guardado
-    assert block.index("known(qTicker)") < block.index("localStorage.getItem('activeTicker')")
+    assert block.index("known(qTicker)") < block.index("localStorage.getItem('fdDemo.activeTicker')")
 
 
 def test_initial_ticker_is_chosen_before_rendering_sidebar():

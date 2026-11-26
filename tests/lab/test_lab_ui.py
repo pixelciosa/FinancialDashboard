@@ -64,9 +64,9 @@ def test_i18n_en_es_same_keys(tr):
 
 def test_language_preference_is_the_dashboards():
     main = open(os.path.join(ROOT, 'index.html'), encoding='utf-8').read()
-    assert "localStorage.getItem('lang')" in main and "localStorage.setItem('lang'" in main
+    assert "localStorage.getItem('fdDemo.lang')" in main and "localStorage.setItem('fdDemo.lang'" in main
     src = _read('lab_i18n.js')
-    assert "localStorage.getItem('lang')" in src and "localStorage.setItem('lang'" in src
+    assert "localStorage.getItem('fdDemo.lang')" in src and "localStorage.setItem('fdDemo.lang'" in src
 
 
 DYNAMIC_PREFIX = ('tile_', 'tip_', 'f_', 'inp_', 'state_', 'err_', 'refresh_', 'cache_', 'ledger_', 'reco_', 'warn_', 'card_', 'sec_', 'nav_', 'attr_', 'stress_', 'journal_')

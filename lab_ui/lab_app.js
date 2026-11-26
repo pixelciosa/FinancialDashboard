@@ -1,8 +1,8 @@
 /* Portfolio Lab: estado, carga por tarjeta, render y navegación. Todo dato viene de /api/lab/*. */
 'use strict';
 
-const LAB_KEY_BENCH = 'lab_bench';
-const LAB_KEY_PERIOD = 'lab_period';
+const LAB_KEY_BENCH = 'fdDemo.lab_bench';
+const LAB_KEY_PERIOD = 'fdDemo.lab_period';
 const LAB_PERIOD_MONTHS = { '1m': 1, '3m': 3, '6m': 6, '1y': 12 };
 const LAB_PERIODS = ['all', '1m', '3m', '6m', 'ytd', '1y'];
 const LAB_LEDGER_LIMIT = 60;

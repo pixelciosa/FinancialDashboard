@@ -553,7 +553,7 @@ Object.assign(LAB_TR.es, {
 });
 
 let labLang = 'en';
-try { labLang = localStorage.getItem('lang') === 'es' ? 'es' : 'en'; } catch (e) { /* idioma solo en memoria */ }
+try { labLang = localStorage.getItem('fdDemo.lang') === 'es' ? 'es' : 'en'; } catch (e) { /* idioma solo en memoria */ }
 
 function t(key, vars) {
   let s = (LAB_TR[labLang] || LAB_TR.en)[key];
@@ -567,7 +567,7 @@ function tHas(key) { return Object.prototype.hasOwnProperty.call(LAB_TR[labLang]
 
 function setLabLang(lang) {
   labLang = lang === 'es' ? 'es' : 'en';
-  try { localStorage.setItem('lang', labLang); } catch (e) { /* idioma solo en memoria */ }
+  try { localStorage.setItem('fdDemo.lang', labLang); } catch (e) { /* idioma solo en memoria */ }
 }
 
 /* Pruebas de estrés (los nombres con año de los escenarios viven solo aquí; la clave la manda el backend). */
