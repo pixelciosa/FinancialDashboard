@@ -12,7 +12,7 @@ decisiones informadas. Público: inversor de nivel intermedio; la UI explica té
 ## Stack (no migrar sin pedido explícito)
 Python 3.11 · Flask · yfinance 1.3 · pandas · CoinGecko (sin key).
 Frontend: un solo `index.html` con CSS y JS embebidos, TradingView Lightweight Charts 4.2.
-IA: Gemma vía NVIDIA (`NVIDIA_API_KEY` en `.env`) solo para texto narrativo.
+IA: modelo de NVIDIA NIM (`NVIDIA_API_KEY` y `NVIDIA_MODEL` en `.env`) solo para texto narrativo.
 
 ## Mapa del código
 | Archivo | Contenido |
@@ -21,7 +21,7 @@ IA: Gemma vía NVIDIA (`NVIDIA_API_KEY` en `.env`) solo para texto narrativo.
 | `portfolio_data.py` | Lectura de los CSV de entrada (portfolio, liquidez, watchlist) y metadatos de tickers |
 | `financials.py` | Tab financiera: trimestres, TTM, EPS vs estimado, ETFs, caché en `data/financials/` |
 | `risk.py` | Modelo de riesgo 0-100 (más alto = más riesgo), sin IA. Reglas: skill `risk-model` |
-| `narrative.py` | Narrativa Gemma validada contra los datos calculados (sin cifras inventadas) |
+| `narrative.py` | Narrativa IA validada contra los datos calculados (sin cifras inventadas) |
 | `valuations.py` | Registro de valuaciones (Barata/Justa/Cara/Info no disponible) y actualización en lote con una sola descarga de precios |
 | `agent.py` | Portfolio Agent (chat): contexto desde las cachés, tablas armadas por el servidor, cifras verificadas |
 | `explore.py` | Modo Explorar: perfil del portfolio, screener de Yahoo (NYSE/Nasdaq), candidatos con el cálculo propio, motivos por plantilla, preferencias en `data/explore_profile.json` |

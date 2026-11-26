@@ -13,7 +13,7 @@ fixtures. You can point the app to your own CSV files (see [Use your own data](#
 ## Design principle: AI is never the source of a number
 
 Prices, metrics, quarters, scores and verdicts come from market data (yfinance, CoinGecko) or from
-deterministic, tested Python code. The language model (Gemma via NVIDIA NIM) only writes prose on top of
+deterministic, tested Python code. The language model (served by NVIDIA NIM; configurable with `NVIDIA_MODEL`) only writes prose on top of
 numbers that were already computed, and its output is validated before it reaches the UI:
 
 - Every number in an AI sentence must appear in the facts the server sent to the model (rounding tolerance).
@@ -94,7 +94,7 @@ yfinance · CoinGecko (no key) · NVIDIA NIM (optional, text only)
 | `portfolio_data.py` | Reads `PORTFOLIO_CSV`, `CASH_CSV`, `WATCHLIST_CSV`; builds the ticker metadata |
 | `financials.py` | Financials tab data and quarterly freshness |
 | `risk.py` | Risk model (rules documented in `.claude/skills/risk-model/SKILL.md`) |
-| `narrative.py` | Gemma narrative, validated against computed facts |
+| `narrative.py` | AI narrative, validated against computed facts |
 | `valuations.py` | Valuation labels and batch refresh |
 | `agent.py` | Portfolio Agent |
 | `explore.py` | Explore mode |

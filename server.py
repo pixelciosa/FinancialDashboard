@@ -108,7 +108,7 @@ def add_header(response):
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 NVIDIA_API_URL  = 'https://integrate.api.nvidia.com/v1/chat/completions'
-NVIDIA_MODEL    = 'google/gemma-4-31b-it'
+NVIDIA_MODEL    = os.environ.get('NVIDIA_MODEL') or 'nvidia/nemotron-3.5-lightning-30b-a3b'  # NIM retira modelos: se cambia desde .env
 NVIDIA_API_KEY  = os.environ.get('NVIDIA_API_KEY', '')
 
 # ─── TICKER METADATA ────────────────────────────────────────────────────────
